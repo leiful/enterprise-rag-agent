@@ -209,6 +209,20 @@ def replace_in_file(path, old_text, new_text):
     return f"Replaced 1 occurrence in {target.name}."
 
 
+def delete_file(path):
+    target, error = resolve_readable_file(path)
+
+    if error:
+        return f"delete_file error: {error}"
+
+    try:
+        target.unlink()
+    except OSError as error:
+        return f"delete_file error: {error}"
+
+    return f"Deleted {target.name}."
+
+
 def search_file(path, query, max_matches=MAX_SEARCH_MATCHES):
     target, error = resolve_readable_file(path)
 
@@ -370,6 +384,11 @@ def call_tool(name, arguments):
             arguments["new_text"],
         )
 
+    if name == "delete_file":
+        return delete_file(
+            arguments["path"],
+        )
+
     if name == "search_file":
         return search_file(
             arguments["path"],
@@ -507,6 +526,23 @@ TOOLS = [
                     },
                 },
                 "required": ["path", "old_text", "new_text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": "Delete one readable project file. This is destructive and requires user confirmation before execution.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The relative file path to delete, such as notes.txt.",
+                    },
+                },
+                "required": ["path"],
             },
         },
     },

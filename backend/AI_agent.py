@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 import json
 import os
@@ -18,7 +18,7 @@ from memory import append_log_entries, load_messages, save_messages, trim_messag
 from tools import TOOLS, call_tool
 
 
-REQUIRES_CONFIRMATION = {"write_file", "replace_in_file"}
+REQUIRES_CONFIRMATION = {"write_file", "replace_in_file", "delete_file"}
 
 
 def create_client():
@@ -115,12 +115,12 @@ def run_agent(client, messages, user_input, max_steps=5):
     new_messages = []
     remaining_file_read_lines = MAX_FILE_READ_LINES_PER_TURN
 
-    # 把本轮用户输入加入共享 messages，实现同一次运行内的短期记忆。
+    # Add this turn's user input to the shared message history.
     user_message = {"role": "user", "content": user_input}
     messages.append(user_message)
     new_messages.append(user_message)
 
-    # 多轮工具调用循环：后续工具可能依赖前面工具的结果。
+    # Run a multi-step tool loop because later calls may depend on earlier results.
     for step in range(max_steps):
         try:
             response = client.chat.completions.create(
@@ -146,7 +146,7 @@ def run_agent(client, messages, user_input, max_steps=5):
         messages.append(assistant_message_dict)
         new_messages.append(assistant_message_dict)
 
-        # 没有 tool_calls，说明模型已经给出了最终自然语言回答。
+        # No tool calls means the model has produced the final natural-language answer.
         if not assistant_message.tool_calls:
             append_log_entries(new_messages)
             trim_messages(messages)
@@ -154,7 +154,7 @@ def run_agent(client, messages, user_input, max_steps=5):
 
         print(f"\nstep {step + 1}:")
 
-        # 一轮 assistant 回复里，可能同时请求多个工具。
+        # One assistant response can request multiple tool calls.
         for tool_call in assistant_message.tool_calls:
             tool_name = tool_call.function.name
 
@@ -166,7 +166,7 @@ def run_agent(client, messages, user_input, max_steps=5):
             print(f"tool call: {tool_name}({tool_args})")
             print(f"tool result: {tool_result}")
 
-            # tool_call_id 用来把工具结果绑定到具体的工具调用请求。
+            # Bind the tool result to the specific tool call request.
             tool_message = {
                 "role": "tool",
                 "tool_call_id": tool_call.id,
@@ -179,7 +179,7 @@ def run_agent(client, messages, user_input, max_steps=5):
                 denied_message = {
                     "role": "assistant",
                     "content": (
-                        "已取消本次文件修改操作；没有继续尝试其他写入或修改工具，文件保持不变。"
+                        "File modification was cancelled. No other write, edit, or delete tool was attempted."
                     ),
                 }
                 messages.append(denied_message)
@@ -200,7 +200,7 @@ def main():
         print(f"Startup error: {error}")
         return
 
-    # 内存里的短期记忆，同时通过 JSON 文件恢复和保存。
+    # Restore short-term memory from the JSON history file.
     messages = load_messages()
 
     print("AI Agent started.")

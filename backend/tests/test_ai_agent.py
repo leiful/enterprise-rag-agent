@@ -1,4 +1,4 @@
-import tempfile
+﻿import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -220,6 +220,53 @@ class RunToolCallTests(unittest.TestCase):
             self.assertFalse(denied_by_user)
             self.assertEqual((workspace / "notes.txt").read_text(encoding="utf-8"), "new")
 
+    def test_delete_file_requires_confirmation_and_can_be_denied(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            (workspace / "notes.txt").write_text("hello", encoding="utf-8")
+            tool_call = make_tool_call(
+                "delete_file",
+                '{"path": "notes.txt"}',
+            )
+
+            with patch.object(tools, "WORKSPACE_ROOT", workspace):
+                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
+                    tool_call,
+                    10,
+                    confirm_callback=lambda name, args: False,
+                )
+
+            self.assertEqual(tool_args, {"path": "notes.txt"})
+            self.assertEqual(
+                tool_result,
+                "delete_file denied by user. Do not try another file modification tool for this request.",
+            )
+            self.assertEqual(remaining_lines, 10)
+            self.assertTrue(denied_by_user)
+            self.assertTrue((workspace / "notes.txt").exists())
+
+    def test_delete_file_runs_after_confirmation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            (workspace / "notes.txt").write_text("hello", encoding="utf-8")
+            tool_call = make_tool_call(
+                "delete_file",
+                '{"path": "notes.txt"}',
+            )
+
+            with patch.object(tools, "WORKSPACE_ROOT", workspace):
+                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
+                    tool_call,
+                    10,
+                    confirm_callback=lambda name, args: True,
+                )
+
+            self.assertEqual(tool_args, {"path": "notes.txt"})
+            self.assertEqual(tool_result, "Deleted notes.txt.")
+            self.assertEqual(remaining_lines, 10)
+            self.assertFalse(denied_by_user)
+            self.assertFalse((workspace / "notes.txt").exists())
+
 
 class RunAgentTests(unittest.TestCase):
     def test_run_agent_stops_after_user_denies_file_modification(self):
@@ -266,7 +313,7 @@ class RunAgentTests(unittest.TestCase):
 
             self.assertEqual(
                 answer,
-                "已取消本次文件修改操作；没有继续尝试其他写入或修改工具，文件保持不变。",
+                "File modification was cancelled. No other write, edit, or delete tool was attempted.",
             )
             self.assertEqual((workspace / "abc.txt").read_text(encoding="utf-8"), "old")
             self.assertEqual(len(calls), 1)

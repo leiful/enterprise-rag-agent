@@ -8,17 +8,15 @@ from config import HISTORY_FILE, LOG_FILE, MAX_HISTORY_MESSAGES, SYSTEM_MESSAGE
 
 
 def message_role(message):
-    # 从普通 message 字典中读取 role。
     return message.get("role")
 
 
 def has_tool_calls(message):
-    # 判断 assistant message 是否包含工具调用请求。
     return bool(message.get("tool_calls"))
 
 
 def load_messages():
-    # 从本地 JSON 恢复长期记忆；没有历史时从 system message 开始。
+    # Restore conversation history, or start with the system message.
     if not os.path.exists(HISTORY_FILE):
         return [SYSTEM_MESSAGE.copy()]
 
@@ -35,13 +33,13 @@ def load_messages():
 
 
 def save_messages(messages):
-    # 保存当前对话历史，脚本重启后可以恢复。
+    # Save the working history so the agent can resume after restart.
     with open(HISTORY_FILE, "w", encoding="utf-8") as file:
         json.dump(messages, file, ensure_ascii=False, indent=2)
 
 
 def append_log_entries(entries):
-    # 追加完整日志，不裁剪；用于排查、审计和回放。
+    # Append the full event log without trimming.
     timestamp = datetime.now().isoformat(timespec="seconds")
 
     with open(LOG_FILE, "a", encoding="utf-8") as file:
@@ -54,7 +52,7 @@ def append_log_entries(entries):
 
 
 def trim_messages(messages):
-    # 控制记忆长度，避免 token 成本和上下文长度无限增长。
+    # Keep message history bounded to avoid unbounded context growth.
     system_messages = [
         message for message in messages
         if message_role(message) == "system"
@@ -66,11 +64,11 @@ def trim_messages(messages):
 
     kept_history = history_messages[-MAX_HISTORY_MESSAGES:]
 
-    # tool message 不能出现在历史开头，因为它需要对应的 tool_call。
+    # History cannot start with a tool message because it needs a matching tool call.
     while kept_history and message_role(kept_history[0]) == "tool":
         kept_history.pop(0)
 
-    # 不要从一次工具调用流程的中间开始保留历史。
+    # Do not keep history starting in the middle of a tool-call exchange.
     if kept_history and message_role(kept_history[0]) == "assistant" and has_tool_calls(kept_history[0]):
         kept_history.pop(0)
 

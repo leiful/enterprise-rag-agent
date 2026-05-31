@@ -184,6 +184,39 @@ class ReplaceInFileTests(ToolsTestCase):
         self.assertEqual(result, "replace_in_file error: file is not allowed: .env")
 
 
+class DeleteFileTests(ToolsTestCase):
+    def test_delete_file_deletes_readable_file(self):
+        result = tools.delete_file("notes.txt")
+
+        self.assertEqual(result, "Deleted notes.txt.")
+        self.assertFalse((self.workspace / "notes.txt").exists())
+
+    def test_delete_file_rejects_missing_file(self):
+        result = tools.delete_file("missing.txt")
+
+        self.assertEqual(result, "delete_file error: file not found: missing.txt")
+
+    def test_delete_file_rejects_excluded_files(self):
+        result = tools.delete_file(".env")
+
+        self.assertEqual(result, "delete_file error: file is not allowed: .env")
+        self.assertTrue((self.workspace / ".env").exists())
+
+    def test_delete_file_rejects_disallowed_extensions(self):
+        result = tools.delete_file("image.png")
+
+        self.assertEqual(result, "delete_file error: file is not allowed: image.png")
+        self.assertTrue((self.workspace / "image.png").exists())
+
+    def test_delete_file_rejects_directories(self):
+        (self.workspace / "docs").mkdir()
+
+        result = tools.delete_file("docs")
+
+        self.assertEqual(result, "delete_file error: file not found: docs")
+        self.assertTrue((self.workspace / "docs").is_dir())
+
+
 class SearchFileTests(ToolsTestCase):
     def test_search_file_finds_matches_case_insensitively(self):
         result = tools.search_file("notes.txt", "KEYWORD", max_matches=1)
@@ -263,6 +296,7 @@ class ToolSchemaTests(unittest.TestCase):
                 "read_file",
                 "write_file",
                 "replace_in_file",
+                "delete_file",
                 "search_file",
                 "run_tests",
                 "search_files",
@@ -286,6 +320,10 @@ class ToolSchemaTests(unittest.TestCase):
         self.assertEqual(
             schemas_by_name["replace_in_file"]["required"],
             ["path", "old_text", "new_text"],
+        )
+        self.assertEqual(
+            schemas_by_name["delete_file"]["required"],
+            ["path"],
         )
         self.assertEqual(
             schemas_by_name["search_file"]["required"],
