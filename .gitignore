@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.py[cod]
+
+chat_history.json
+chat_log.jsonl
+todos.json
+
+.venv/
+venv/
