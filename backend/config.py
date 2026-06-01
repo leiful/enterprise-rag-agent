@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 MODEL = "deepseek-v4-flash"
 BASE_URL = "https://api.deepseek.com"
+APP_API_KEY = os.environ.get("APP_API_KEY", "").strip()
 
 MAX_HISTORY_MESSAGES = 20
 MAX_FILE_READ_LINES_PER_TURN = 120

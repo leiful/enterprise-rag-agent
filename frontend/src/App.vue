@@ -2,6 +2,7 @@
 import { ref } from "vue";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_KEY = import.meta.env.VITE_APP_API_KEY || "";
 
 const input = ref("");
 const loading = ref(false);
@@ -30,6 +31,7 @@ async function sendMessage() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-API-Key": API_KEY,
       },
       body: JSON.stringify({ message: text }),
     });
