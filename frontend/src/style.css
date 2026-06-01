@@ -12,6 +12,7 @@ body {
 }
 
 button,
+input,
 textarea {
   font: inherit;
 }
@@ -62,6 +63,56 @@ textarea {
   color: #047857;
   font-size: 13px;
   font-weight: 600;
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.secondary-button {
+  min-width: auto;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  font-size: 13px;
+}
+
+.login-form {
+  width: min(420px, calc(100% - 40px));
+  margin: 48px auto;
+  display: grid;
+  gap: 16px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+}
+
+input {
+  height: 44px;
+  padding: 0 12px;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
 .messages {
@@ -116,19 +167,10 @@ pre {
 }
 
 textarea {
-  width: 100%;
   resize: vertical;
   min-height: 72px;
   max-height: 180px;
   padding: 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  outline: none;
-}
-
-textarea:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
 button {
@@ -166,5 +208,10 @@ button:disabled {
 
   button {
     width: 100%;
+  }
+
+  .session {
+    align-items: flex-end;
+    flex-direction: column;
   }
 }

@@ -14,7 +14,10 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 MODEL = "deepseek-v4-flash"
 BASE_URL = "https://api.deepseek.com"
-APP_API_KEY = os.environ.get("APP_API_KEY", "").strip()
+APP_USERNAME = os.environ.get("APP_USERNAME", "").strip()
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
+SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE_SECONDS", "604800"))
+DATABASE_FILE = os.environ.get("DATABASE_FILE", str(PROJECT_ROOT / "agent.db"))
 
 MAX_HISTORY_MESSAGES = 20
 MAX_FILE_READ_LINES_PER_TURN = 120

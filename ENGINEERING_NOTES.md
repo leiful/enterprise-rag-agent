@@ -35,19 +35,48 @@ npm.cmd install --cache .npm-cache
 
 ```env
 DEEPSEEK_API_KEY=your_model_provider_key
-APP_API_KEY=your_local_app_api_key
+APP_USERNAME=admin
+APP_PASSWORD=your_local_login_password
+SESSION_MAX_AGE_SECONDS=604800
+DATABASE_FILE=E:\Project\AI Agent\agent.db
 ```
 
 前端配置在 `frontend/.env`：
 
 ```env
 VITE_API_BASE=http://localhost:8000
-VITE_APP_API_KEY=your_local_app_api_key
 ```
 
-本地开发时，`APP_API_KEY` 和 `VITE_APP_API_KEY` 的值必须一致。
-
 真实密钥不能提交到 Git。`.env` 文件已经被 `.gitignore` 忽略。
+
+不要把登录密码、模型 API Key 放进前端 `VITE_` 变量。前端变量会被打包进浏览器代码里，用户可以看到。
+
+## 数据库
+
+当前使用 SQLite。默认数据库文件是：
+
+```text
+agent.db
+```
+
+后端启动时会自动建表，并根据 `.env` 里的 `APP_USERNAME` 和 `APP_PASSWORD` 创建默认用户。
+
+当前有两张表：
+
+```text
+users      用户名和密码哈希
+sessions   随机 session id、用户 id、过期时间
+```
+
+数据库文件不提交到 Git，`.gitignore` 已忽略：
+
+```text
+*.db
+*.db-shm
+*.db-wal
+```
+
+密码不明文保存，数据库里保存的是 PBKDF2 哈希。后续可以升级成 Argon2。
 
 ## 端口
 
@@ -115,17 +144,23 @@ frontend/dist/
 
 正式部署前端时，部署 `frontend/dist/`，不要部署整个 `frontend/` 文件夹，也不要部署项目根目录。
 
-## API 保护
+## 登录保护
 
-后端 `/chat` 和 `/files` 这类接口需要请求头：
+后端 `/chat` 和 `/files` 这类接口需要登录后才能访问。
+
+登录成功后，后端会生成一个随机 session id，保存到 SQLite，并把这个 session id 通过 `HttpOnly` cookie 发给浏览器。浏览器后续请求会自动带上这个 cookie，后端用它判断用户是否已经登录。
+
+当前 cookie 有效期是 1 周：
 
 ```text
-X-API-Key: APP_API_KEY 的值
+SESSION_MAX_AGE_SECONDS=604800
 ```
+
+当前 session 存在 SQLite 里，所以后端重启后 session 仍然可以查到。正式生产系统也常把 session 放到 Redis。
 
 `/health` 保持公开，用来让部署平台或自己检查后端是否运行。
 
-测试不带密钥访问：
+测试未登录访问：
 
 ```powershell
 Invoke-RestMethod -Method Post `
@@ -137,10 +172,27 @@ Invoke-RestMethod -Method Post `
 期望结果：
 
 ```text
-Invalid or missing API key.
+Login required.
 ```
 
-注意：前端里所有 `VITE_` 开头的变量都会被打包进浏览器代码里，用户可以看到。所以现在这个 API Key 适合学习、本地开发、小范围保护，但不是完整的公网登录系统。
+测试登录并访问接口：
+
+```powershell
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+Invoke-RestMethod -Method Post `
+  -Uri http://localhost:8000/login `
+  -WebSession $session `
+  -ContentType 'application/json' `
+  -Body '{"username":"admin","password":"your_local_login_password"}'
+
+Invoke-RestMethod -Method Post `
+  -Uri http://localhost:8000/chat `
+  -WebSession $session `
+  -ContentType 'application/json' `
+  -Body '{"message":"hello"}'
+```
+
+注意：这个版本是学习用的单用户登录。真正公网多人系统还需要 HTTPS、更完整的用户管理、权限模型和 CSRF 防护。
 
 ## 部署边界
 

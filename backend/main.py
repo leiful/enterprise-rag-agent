@@ -2,14 +2,27 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import secrets
+import time
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from AI_agent import create_client, run_agent
-from config import APP_API_KEY
+from config import APP_PASSWORD, APP_USERNAME, SESSION_MAX_AGE_SECONDS
+from database import authenticate_user, create_session as save_session, delete_session, get_session, init_db
 from memory import load_messages, save_messages
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    authenticated: bool
+    username: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -23,11 +36,12 @@ class ChatResponse(BaseModel):
 client = None
 messages = None
 startup_error = None
-API_KEY_HEADER = "X-API-Key"
+SESSION_COOKIE = "agent_session"
 
 
 def startup():
     global client, messages, startup_error
+    init_db()
     messages = load_messages()
 
     try:
@@ -43,18 +57,45 @@ async def lifespan(app):
     yield
 
 
-def require_api_key(x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER)):
-    if not APP_API_KEY:
+def require_auth_config():
+    if not APP_USERNAME or not APP_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="APP_API_KEY is not configured.",
+            detail="Login is not configured.",
         )
 
-    if x_api_key != APP_API_KEY:
+
+def create_session(user_id):
+    session_id = secrets.token_urlsafe(32)
+    save_session(session_id, user_id, time.time() + SESSION_MAX_AGE_SECONDS)
+    return session_id
+
+
+def get_session_username(session_id):
+    require_auth_config()
+
+    session = get_session(session_id, time.time())
+    if not session:
+        return None
+
+    return session["username"]
+
+
+def require_user(agent_session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    if not agent_session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key.",
+            detail="Login required.",
         )
+
+    username = get_session_username(agent_session)
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid session.",
+        )
+
+    return username
 
 
 app = FastAPI(title="AI Tool Calling Agent", lifespan=lifespan)
@@ -76,7 +117,49 @@ def health():
     }
 
 
-@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
+@app.post("/login", response_model=AuthResponse)
+def login(request: LoginRequest, response: Response):
+    require_auth_config()
+
+    user = authenticate_user(request.username, request.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
+        )
+
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=create_session(user["id"]),
+        httponly=True,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        samesite="lax",
+    )
+    return AuthResponse(authenticated=True, username=request.username)
+
+
+@app.post("/logout", response_model=AuthResponse)
+def logout(response: Response, agent_session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    if agent_session:
+        delete_session(agent_session)
+
+    response.delete_cookie(key=SESSION_COOKIE)
+    return AuthResponse(authenticated=False)
+
+
+@app.get("/me", response_model=AuthResponse)
+def me(agent_session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    if not agent_session:
+        return AuthResponse(authenticated=False)
+
+    username = get_session_username(agent_session)
+    if username is None:
+        return AuthResponse(authenticated=False)
+
+    return AuthResponse(authenticated=True, username=username)
+
+
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_user)])
 def chat(request: ChatRequest):
     if startup_error is not None:
         return ChatResponse(answer=f"Startup error: {startup_error}")
@@ -86,7 +169,7 @@ def chat(request: ChatRequest):
     return ChatResponse(answer=answer)
 
 
-@app.get("/files", dependencies=[Depends(require_api_key)])
+@app.get("/files", dependencies=[Depends(require_user)])
 def files():
     backend_dir = Path(__file__).resolve().parent
     names = sorted(path.name for path in backend_dir.iterdir() if path.is_file())

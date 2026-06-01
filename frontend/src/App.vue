@@ -2,10 +2,13 @@
 import { ref } from "vue";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
-const API_KEY = import.meta.env.VITE_APP_API_KEY || "";
 
 const input = ref("");
+const username = ref("");
+const password = ref("");
+const currentUser = ref("");
 const loading = ref(false);
+const authLoading = ref(false);
 const error = ref("");
 const messages = ref([
   {
@@ -13,6 +16,79 @@ const messages = ref([
     content: "Ask about project files, code, or tool behavior.",
   },
 ]);
+
+const isAuthenticated = ref(false);
+
+async function checkSession() {
+  authLoading.value = true;
+  error.value = "";
+
+  try {
+    const response = await fetch(`${API_BASE}/me`, {
+      credentials: "include",
+    });
+    const data = await response.json();
+    isAuthenticated.value = Boolean(data.authenticated);
+    currentUser.value = data.username || "";
+  } catch (err) {
+    error.value = err.message || "Session check failed";
+  } finally {
+    authLoading.value = false;
+  }
+}
+
+async function login() {
+  if (!username.value.trim() || !password.value || authLoading.value) {
+    return;
+  }
+
+  authLoading.value = true;
+  error.value = "";
+
+  try {
+    const response = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        username: username.value.trim(),
+        password: password.value,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Login failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    isAuthenticated.value = Boolean(data.authenticated);
+    currentUser.value = data.username || username.value.trim();
+    password.value = "";
+  } catch (err) {
+    error.value = err.message || "Login failed";
+  } finally {
+    authLoading.value = false;
+  }
+}
+
+async function logout() {
+  authLoading.value = true;
+  error.value = "";
+
+  try {
+    await fetch(`${API_BASE}/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } finally {
+    isAuthenticated.value = false;
+    currentUser.value = "";
+    password.value = "";
+    authLoading.value = false;
+  }
+}
 
 async function sendMessage() {
   const text = input.value.trim();
@@ -31,8 +107,8 @@ async function sendMessage() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
       },
+      credentials: "include",
       body: JSON.stringify({ message: text }),
     });
 
@@ -48,6 +124,8 @@ async function sendMessage() {
     loading.value = false;
   }
 }
+
+checkSession();
 </script>
 
 <template>
@@ -58,10 +136,35 @@ async function sendMessage() {
           <h1>AI Agent</h1>
           <p>Vue 3 + FastAPI</p>
         </div>
-        <span class="status">Local</span>
+        <div class="session">
+          <span class="status">{{ isAuthenticated ? currentUser : "Signed out" }}</span>
+          <button
+            v-if="isAuthenticated"
+            class="secondary-button"
+            type="button"
+            :disabled="authLoading"
+            @click="logout"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
-      <div class="messages">
+      <form v-if="!isAuthenticated" class="login-form" @submit.prevent="login">
+        <label>
+          <span>Username</span>
+          <input v-model="username" autocomplete="username" />
+        </label>
+        <label>
+          <span>Password</span>
+          <input v-model="password" type="password" autocomplete="current-password" />
+        </label>
+        <button type="submit" :disabled="authLoading || !username.trim() || !password">
+          {{ authLoading ? "Signing in" : "Login" }}
+        </button>
+      </form>
+
+      <div v-else class="messages">
         <article
           v-for="(message, index) in messages"
           :key="index"
@@ -75,7 +178,7 @@ async function sendMessage() {
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <form class="composer" @submit.prevent="sendMessage">
+      <form v-if="isAuthenticated" class="composer" @submit.prevent="sendMessage">
         <textarea
           v-model="input"
           rows="3"

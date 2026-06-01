@@ -31,19 +31,20 @@ frontend/.env.example  Frontend environment template
 ## Setup
 
 Create `.env` in the project root. `DEEPSEEK_API_KEY` is used by the backend to call
-the model provider. `APP_API_KEY` protects backend API routes such as `/chat` and
-`/files`.
+the model provider. `APP_USERNAME` and `APP_PASSWORD` are used for local login.
 
 ```env
 DEEPSEEK_API_KEY=your_api_key_here
-APP_API_KEY=change_this_local_api_key
+APP_USERNAME=admin
+APP_PASSWORD=change_this_local_password
+SESSION_MAX_AGE_SECONDS=604800
+DATABASE_FILE=E:\Project\AI Agent\agent.db
 ```
 
-Create `frontend/.env` with the same app API key:
+Create `frontend/.env`:
 
 ```env
 VITE_API_BASE=http://localhost:8000
-VITE_APP_API_KEY=change_this_local_api_key
 ```
 
 Install backend dependencies:
@@ -104,12 +105,23 @@ Open:
 http://localhost:5173
 ```
 
-## API Protection
+## Login Protection
 
-The browser app sends the frontend value `VITE_APP_API_KEY` as an `X-API-Key`
-request header. The backend compares that header with `APP_API_KEY`.
+The browser app logs in with `/login`. After a successful login, the backend
+creates a random session id, stores it in SQLite, and sends it to the browser as
+an `HttpOnly` session cookie. Protected routes such as `/chat` and `/files`
+require that session cookie. The default session lifetime is one week
+(`SESSION_MAX_AGE_SECONDS=604800`).
 
-Requests without the correct key are rejected:
+The backend creates the SQLite database automatically on startup. By default it
+uses `agent.db` in the project root. The database contains:
+
+```text
+users      usernames and password hashes
+sessions   random session ids, user ids, and expiration times
+```
+
+Requests without a login session are rejected:
 
 ```powershell
 Invoke-RestMethod -Method Post `
@@ -121,15 +133,26 @@ Invoke-RestMethod -Method Post `
 Expected result:
 
 ```text
-{"detail":"Invalid or missing API key."}
+{"detail":"Login required."}
 ```
 
-Requests with the correct key are allowed:
+Log in and keep the session cookie:
+
+```powershell
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+Invoke-RestMethod -Method Post `
+  -Uri http://localhost:8000/login `
+  -WebSession $session `
+  -ContentType 'application/json' `
+  -Body '{"username":"admin","password":"change_this_local_password"}'
+```
+
+Use the logged-in session:
 
 ```powershell
 Invoke-RestMethod -Method Post `
   -Uri http://localhost:8000/chat `
-  -Headers @{ 'X-API-Key' = 'change_this_local_api_key' } `
+  -WebSession $session `
   -ContentType 'application/json' `
   -Body '{"message":"hello"}'
 ```
@@ -137,7 +160,7 @@ Invoke-RestMethod -Method Post `
 ## Notes
 
 - `.env`, chat history, chat logs, frontend build output, and dependency folders are ignored by Git.
-- `APP_API_KEY` and `VITE_APP_API_KEY` must match in local development.
-- Frontend environment variables prefixed with `VITE_` are visible in browser code, so this API key is only a first layer for learning or small local deployments.
+- SQLite database files (`*.db`, `*.db-shm`, `*.db-wal`) are ignored by Git.
+- Real secrets belong on the backend. Do not put passwords or model API keys in frontend `VITE_` variables.
 - Dangerous file tools require confirmation in the CLI flow.
 - `/health` is public so deployments can check whether the backend is running.

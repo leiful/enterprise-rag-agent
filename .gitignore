@@ -5,6 +5,9 @@ __pycache__/
 chat_history.json
 chat_log.jsonl
 todos.json
+*.db
+*.db-shm
+*.db-wal
 
 .venv/
 venv/
