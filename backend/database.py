@@ -76,6 +76,24 @@ def init_db():
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            );
             """
         )
 
@@ -125,7 +143,7 @@ def get_session(session_id, now):
     with connect() as connection:
         session = connection.execute(
             """
-            SELECT sessions.id, sessions.expires_at, users.username
+            SELECT sessions.id, sessions.expires_at, users.id AS user_id, users.username
             FROM sessions
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.id = ?
@@ -140,9 +158,108 @@ def get_session(session_id, now):
         delete_session(session_id)
         return None
 
-    return {"username": session["username"], "expires_at": session["expires_at"]}
+    return {
+        "user_id": session["user_id"],
+        "username": session["username"],
+        "expires_at": session["expires_at"],
+    }
 
 
 def delete_session(session_id):
     with connect() as connection:
         connection.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+
+def create_conversation(user_id, title):
+    now = utc_now_iso()
+    with connect() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO conversations (user_id, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, title, now, now),
+        )
+        return cursor.lastrowid
+
+
+def list_conversations(user_id):
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, title, created_at, updated_at
+            FROM conversations
+            WHERE user_id = ?
+            ORDER BY updated_at DESC, id DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def get_conversation(user_id, conversation_id):
+    with connect() as connection:
+        row = connection.execute(
+            """
+            SELECT id, title, created_at, updated_at
+            FROM conversations
+            WHERE id = ? AND user_id = ?
+            """,
+            (conversation_id, user_id),
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
+def update_conversation_title(user_id, conversation_id, title):
+    now = utc_now_iso()
+    with connect() as connection:
+        connection.execute(
+            """
+            UPDATE conversations
+            SET title = ?, updated_at = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (title, now, conversation_id, user_id),
+        )
+
+
+def touch_conversation(user_id, conversation_id):
+    with connect() as connection:
+        connection.execute(
+            """
+            UPDATE conversations
+            SET updated_at = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (utc_now_iso(), conversation_id, user_id),
+        )
+
+
+def add_message(conversation_id, role, content):
+    with connect() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO messages (conversation_id, role, content, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (conversation_id, role, content, utc_now_iso()),
+        )
+        return cursor.lastrowid
+
+
+def list_messages(user_id, conversation_id):
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT messages.id, messages.role, messages.content, messages.created_at
+            FROM messages
+            JOIN conversations ON conversations.id = messages.conversation_id
+            WHERE messages.conversation_id = ? AND conversations.user_id = ?
+            ORDER BY messages.id ASC
+            """,
+            (conversation_id, user_id),
+        ).fetchall()
+
+    return [dict(row) for row in rows]

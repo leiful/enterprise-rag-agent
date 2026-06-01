@@ -59,6 +59,31 @@ class DatabaseTests(unittest.TestCase):
         self.assertIsNone(session)
         self.assertIsNone(database.get_session("session-1", now=101))
 
+    def test_create_and_list_conversation_messages(self):
+        database.init_db()
+        user = database.authenticate_user("admin", "password")
+        conversation_id = database.create_conversation(user["id"], "Hello")
+
+        database.add_message(conversation_id, "user", "hi")
+        database.add_message(conversation_id, "assistant", "hello")
+
+        conversations = database.list_conversations(user["id"])
+        messages = database.list_messages(user["id"], conversation_id)
+
+        self.assertEqual(conversations[0]["id"], conversation_id)
+        self.assertEqual(conversations[0]["title"], "Hello")
+        self.assertEqual(
+            [(message["role"], message["content"]) for message in messages],
+            [("user", "hi"), ("assistant", "hello")],
+        )
+
+    def test_get_conversation_rejects_other_user(self):
+        database.init_db()
+        admin = database.authenticate_user("admin", "password")
+        other_id = database.create_conversation(admin["id"], "Private")
+
+        self.assertIsNone(database.get_conversation(admin["id"] + 1, other_id))
+
 
 if __name__ == "__main__":
     unittest.main()

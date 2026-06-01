@@ -13,8 +13,8 @@ from openai import (
     RateLimitError,
 )
 
-from config import BASE_URL, MAX_FILE_READ_LINES_PER_TURN, MODEL
-from memory import append_log_entries, load_messages, save_messages, trim_messages
+from config import BASE_URL, MAX_FILE_READ_LINES_PER_TURN, MODEL, SYSTEM_MESSAGE
+from memory import append_log_entries, trim_messages
 from tools import TOOLS, call_tool
 
 
@@ -200,8 +200,8 @@ def main():
         print(f"Startup error: {error}")
         return
 
-    # Restore short-term memory from the JSON history file.
-    messages = load_messages()
+    # The web app stores history in SQLite. The CLI starts a fresh local session.
+    messages = [SYSTEM_MESSAGE.copy()]
 
     print("AI Agent started.")
     print("Try: what time is it now?")
@@ -215,7 +215,6 @@ def main():
             break
 
         answer = run_agent(client, messages, user_input)
-        save_messages(messages)
         print(f"AI: {answer}")
 
 

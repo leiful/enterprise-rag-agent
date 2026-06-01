@@ -11,8 +11,21 @@ from pydantic import BaseModel
 
 from AI_agent import create_client, run_agent
 from config import APP_PASSWORD, APP_USERNAME, SESSION_MAX_AGE_SECONDS
-from database import authenticate_user, create_session as save_session, delete_session, get_session, init_db
-from memory import load_messages, save_messages
+from config import SYSTEM_MESSAGE
+from database import (
+    add_message,
+    authenticate_user,
+    create_conversation,
+    create_session as save_session,
+    delete_session,
+    get_conversation,
+    get_session,
+    init_db,
+    list_conversations,
+    list_messages,
+    touch_conversation,
+    update_conversation_title,
+)
 
 
 class LoginRequest(BaseModel):
@@ -27,22 +40,26 @@ class AuthResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    conversation_id: int | None = None
 
 
 class ChatResponse(BaseModel):
     answer: str
+    conversation_id: int
+
+
+class ConversationRequest(BaseModel):
+    title: str | None = None
 
 
 client = None
-messages = None
 startup_error = None
 SESSION_COOKIE = "agent_session"
 
 
 def startup():
-    global client, messages, startup_error
+    global client, startup_error
     init_db()
-    messages = load_messages()
 
     try:
         client = create_client()
@@ -78,7 +95,7 @@ def get_session_username(session_id):
     if not session:
         return None
 
-    return session["username"]
+    return {"id": session["user_id"], "username": session["username"]}
 
 
 def require_user(agent_session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
@@ -88,14 +105,14 @@ def require_user(agent_session: str | None = Cookie(default=None, alias=SESSION_
             detail="Login required.",
         )
 
-    username = get_session_username(agent_session)
-    if username is None:
+    user = get_session_username(agent_session)
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session.",
         )
 
-    return username
+    return user
 
 
 app = FastAPI(title="AI Tool Calling Agent", lifespan=lifespan)
@@ -152,21 +169,96 @@ def me(agent_session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
     if not agent_session:
         return AuthResponse(authenticated=False)
 
-    username = get_session_username(agent_session)
-    if username is None:
+    user = get_session_username(agent_session)
+    if user is None:
         return AuthResponse(authenticated=False)
 
-    return AuthResponse(authenticated=True, username=username)
+    return AuthResponse(authenticated=True, username=user["username"])
+
+
+def make_conversation_title(message):
+    title = " ".join(message.split())
+    if len(title) > 48:
+        return f"{title[:45]}..."
+    return title or "New conversation"
+
+
+def build_agent_messages(saved_messages):
+    messages = [SYSTEM_MESSAGE.copy()]
+    for message in saved_messages:
+        if message["role"] in {"user", "assistant"}:
+            messages.append({
+                "role": message["role"],
+                "content": message["content"],
+            })
+    return messages
+
+
+@app.get("/conversations", dependencies=[Depends(require_user)])
+def conversations(user=Depends(require_user)):
+    return {"conversations": list_conversations(user["id"])}
+
+
+@app.post("/conversations", dependencies=[Depends(require_user)])
+def new_conversation(request: ConversationRequest, user=Depends(require_user)):
+    title = request.title or "New conversation"
+    conversation_id = create_conversation(user["id"], title)
+    return {
+        "id": conversation_id,
+        "title": title,
+    }
+
+
+@app.get("/conversations/{conversation_id}/messages", dependencies=[Depends(require_user)])
+def conversation_messages(conversation_id: int, user=Depends(require_user)):
+    conversation = get_conversation(user["id"], conversation_id)
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found.",
+        )
+
+    return {
+        "conversation": conversation,
+        "messages": list_messages(user["id"], conversation_id),
+    }
 
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_user)])
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, user=Depends(require_user)):
     if startup_error is not None:
-        return ChatResponse(answer=f"Startup error: {startup_error}")
+        return ChatResponse(answer=f"Startup error: {startup_error}", conversation_id=0)
 
-    answer = run_agent(client, messages, request.message)
-    save_messages(messages)
-    return ChatResponse(answer=answer)
+    conversation_id = request.conversation_id
+    is_new_conversation = conversation_id is None
+
+    if conversation_id is None:
+        conversation_id = create_conversation(
+            user["id"],
+            make_conversation_title(request.message),
+        )
+    elif not get_conversation(user["id"], conversation_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found.",
+        )
+
+    saved_messages = list_messages(user["id"], conversation_id)
+    agent_messages = build_agent_messages(saved_messages)
+    answer = run_agent(client, agent_messages, request.message)
+
+    add_message(conversation_id, "user", request.message)
+    add_message(conversation_id, "assistant", answer or "")
+    touch_conversation(user["id"], conversation_id)
+
+    if is_new_conversation:
+        update_conversation_title(
+            user["id"],
+            conversation_id,
+            make_conversation_title(request.message),
+        )
+
+    return ChatResponse(answer=answer, conversation_id=conversation_id)
 
 
 @app.get("/files", dependencies=[Depends(require_user)])

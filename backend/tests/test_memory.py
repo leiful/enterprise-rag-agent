@@ -7,58 +7,6 @@ from unittest.mock import patch
 import memory
 
 
-class MemoryLoadSaveTests(unittest.TestCase):
-    def test_load_messages_returns_system_message_when_history_is_missing(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            history_file = Path(temp_dir) / "missing_history.json"
-
-            with patch.object(memory, "HISTORY_FILE", str(history_file)):
-                messages = memory.load_messages()
-
-        self.assertEqual(messages, [memory.SYSTEM_MESSAGE])
-        self.assertIsNot(messages[0], memory.SYSTEM_MESSAGE)
-
-    def test_load_messages_returns_system_message_when_history_is_invalid_json(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            history_file = Path(temp_dir) / "chat_history.json"
-            history_file.write_text("{bad json", encoding="utf-8")
-
-            with patch.object(memory, "HISTORY_FILE", str(history_file)):
-                messages = memory.load_messages()
-
-        self.assertEqual(messages, [memory.SYSTEM_MESSAGE])
-
-    def test_load_messages_inserts_system_message_when_missing(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            history_file = Path(temp_dir) / "chat_history.json"
-            history_file.write_text(
-                json.dumps([{"role": "user", "content": "hello"}]),
-                encoding="utf-8",
-            )
-
-            with patch.object(memory, "HISTORY_FILE", str(history_file)):
-                messages = memory.load_messages()
-
-        self.assertEqual(messages[0], memory.SYSTEM_MESSAGE)
-        self.assertEqual(messages[1], {"role": "user", "content": "hello"})
-
-    def test_save_messages_writes_json_history(self):
-        messages = [
-            memory.SYSTEM_MESSAGE.copy(),
-            {"role": "user", "content": "hello"},
-        ]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            history_file = Path(temp_dir) / "chat_history.json"
-
-            with patch.object(memory, "HISTORY_FILE", str(history_file)):
-                memory.save_messages(messages)
-
-            saved = json.loads(history_file.read_text(encoding="utf-8"))
-
-        self.assertEqual(saved, messages)
-
-
 class MemoryLogTests(unittest.TestCase):
     def test_append_log_entries_writes_json_lines(self):
         entries = [

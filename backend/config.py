@@ -21,16 +21,21 @@ DATABASE_FILE = os.environ.get("DATABASE_FILE", str(PROJECT_ROOT / "agent.db"))
 
 MAX_HISTORY_MESSAGES = 20
 MAX_FILE_READ_LINES_PER_TURN = 120
-HISTORY_FILE = "chat_history.json"
 LOG_FILE = "chat_log.jsonl"
 
 ALLOWED_READ_EXTENSIONS = {".py", ".md", ".txt", ".json", ".jsonl"}
-EXCLUDED_READ_FILES = {".env", HISTORY_FILE, LOG_FILE, "todos.json"}
+EXCLUDED_READ_FILES = {".env", LOG_FILE, "todos.json"}
 MAX_READ_LINES = 120
 MAX_SEARCH_MATCHES = 20
 MAX_PROJECT_SEARCH_MATCHES = 30
 
 SYSTEM_MESSAGE = {
     "role": "system",
-    "content": "You are a tiny AI agent. Use tools when they are useful.",
+    "content": (
+        "You are a project assistant inside a private web console. "
+        "Answer the user's question directly in Chinese when the user writes Chinese. "
+        "Use tools only when they are necessary for the user's request. "
+        "Do not inspect project files just because the user asks a casual identity question like 'who am I'. "
+        "For that, answer that they are the signed-in user you are chatting with, and explain that you do not know more personal identity unless the app provides it."
+    ),
 }

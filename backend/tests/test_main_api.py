@@ -19,9 +19,7 @@ class ApiAuthTests(unittest.TestCase):
         self.db_username_patch = patch.object(database, "APP_USERNAME", "admin")
         self.db_password_patch = patch.object(database, "APP_PASSWORD", "password")
         self.create_client_patch = patch.object(main, "create_client", return_value=object())
-        self.load_messages_patch = patch.object(main, "load_messages", return_value=[])
         self.run_agent_patch = patch.object(main, "run_agent", return_value="ok")
-        self.save_messages_patch = patch.object(main, "save_messages")
 
         self.database_patch.start()
         self.username_patch.start()
@@ -29,15 +27,11 @@ class ApiAuthTests(unittest.TestCase):
         self.db_username_patch.start()
         self.db_password_patch.start()
         self.create_client_patch.start()
-        self.load_messages_patch.start()
         self.run_agent_patch.start()
-        self.save_messages_patch.start()
         database.init_db()
 
     def tearDown(self):
-        self.save_messages_patch.stop()
         self.run_agent_patch.stop()
-        self.load_messages_patch.stop()
         self.create_client_patch.stop()
         self.db_password_patch.stop()
         self.db_username_patch.stop()
@@ -126,7 +120,69 @@ class ApiAuthTests(unittest.TestCase):
 
         self.assertEqual(login_response.status_code, 200)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"answer": "ok"})
+        data = response.json()
+        self.assertEqual(data["answer"], "ok")
+        self.assertIsInstance(data["conversation_id"], int)
+
+        messages = database.list_messages(self.default_user_id(), data["conversation_id"])
+        self.assertEqual(
+            [(message["role"], message["content"]) for message in messages],
+            [("user", "hello"), ("assistant", "ok")],
+        )
+
+    def test_chat_appends_to_existing_conversation(self):
+        user_id = self.default_user_id()
+        conversation_id = database.create_conversation(user_id, "Existing")
+        database.add_message(conversation_id, "user", "first")
+        database.add_message(conversation_id, "assistant", "second")
+
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            response = client.post(
+                "/chat",
+                json={"message": "continue", "conversation_id": conversation_id},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["conversation_id"], conversation_id)
+
+        messages = database.list_messages(user_id, conversation_id)
+        self.assertEqual(messages[-2]["content"], "continue")
+        self.assertEqual(messages[-1]["content"], "ok")
+
+    def test_conversations_list_requires_login(self):
+        with TestClient(main.app) as client:
+            response = client.get("/conversations")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_logged_in_user_can_list_conversations_and_messages(self):
+        user_id = self.default_user_id()
+        conversation_id = database.create_conversation(user_id, "Saved")
+        database.add_message(conversation_id, "user", "hello")
+
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            conversations_response = client.get("/conversations")
+            messages_response = client.get(f"/conversations/{conversation_id}/messages")
+
+        self.assertEqual(conversations_response.status_code, 200)
+        self.assertEqual(
+            conversations_response.json()["conversations"][0]["title"],
+            "Saved",
+        )
+        self.assertEqual(messages_response.status_code, 200)
+        self.assertEqual(messages_response.json()["messages"][0]["content"], "hello")
+
+    def test_chat_rejects_unknown_conversation(self):
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            response = client.post(
+                "/chat",
+                json={"message": "hello", "conversation_id": 999},
+            )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_files_rejects_missing_session(self):
         with TestClient(main.app) as client:

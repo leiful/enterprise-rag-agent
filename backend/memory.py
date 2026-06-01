@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import json
-import os
 from datetime import datetime
 
-from config import HISTORY_FILE, LOG_FILE, MAX_HISTORY_MESSAGES, SYSTEM_MESSAGE
+from config import LOG_FILE, MAX_HISTORY_MESSAGES, SYSTEM_MESSAGE
 
 
 def message_role(message):
@@ -15,31 +14,8 @@ def has_tool_calls(message):
     return bool(message.get("tool_calls"))
 
 
-def load_messages():
-    # Restore conversation history, or start with the system message.
-    if not os.path.exists(HISTORY_FILE):
-        return [SYSTEM_MESSAGE.copy()]
-
-    try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as file:
-            messages = json.load(file)
-    except (OSError, json.JSONDecodeError):
-        return [SYSTEM_MESSAGE.copy()]
-
-    if not messages or message_role(messages[0]) != "system":
-        messages.insert(0, SYSTEM_MESSAGE.copy())
-
-    return messages
-
-
-def save_messages(messages):
-    # Save the working history so the agent can resume after restart.
-    with open(HISTORY_FILE, "w", encoding="utf-8") as file:
-        json.dump(messages, file, ensure_ascii=False, indent=2)
-
-
 def append_log_entries(entries):
-    # Append the full event log without trimming.
+    # SQLite stores chat history; this JSONL file is only for debugging events.
     timestamp = datetime.now().isoformat(timespec="seconds")
 
     with open(LOG_FILE, "a", encoding="utf-8") as file:
