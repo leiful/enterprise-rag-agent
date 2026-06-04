@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import database
 import main
+from test_vector_store import FakeEmbeddingClient
 
 
 class ApiAuthTests(unittest.TestCase):
@@ -19,7 +20,23 @@ class ApiAuthTests(unittest.TestCase):
         self.db_username_patch = patch.object(database, "APP_USERNAME", "admin")
         self.db_password_patch = patch.object(database, "APP_PASSWORD", "password")
         self.create_client_patch = patch.object(main, "create_client", return_value=object())
-        self.run_agent_patch = patch.object(main, "run_agent", return_value="ok")
+        self.run_agent_patch = patch.object(
+            main,
+            "run_agent",
+            return_value={
+                "answer": "ok",
+                "sources": [
+                    {
+                        "label": "K1",
+                        "document_id": "notes.md",
+                        "chunk_id": "notes.md_chunk_0000",
+                        "chunk_index": 0,
+                        "score": 0.7,
+                        "text": "source text",
+                    }
+                ],
+            },
+        )
 
         self.database_patch.start()
         self.username_patch.start()
@@ -123,12 +140,50 @@ class ApiAuthTests(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["answer"], "ok")
         self.assertIsInstance(data["conversation_id"], int)
+        self.assertEqual(data["sources"][0]["label"], "K1")
 
         messages = database.list_messages(self.default_user_id(), data["conversation_id"])
         self.assertEqual(
             [(message["role"], message["content"]) for message in messages],
             [("user", "hello"), ("assistant", "ok")],
         )
+        self.assertEqual(messages[-1]["sources"][0]["document_id"], "notes.md")
+
+    def test_chat_stream_accepts_logged_in_session(self):
+        preflight = {
+            "content": "Knowledge base preflight result:\nsource\n\nUser question:\nhello",
+            "sources": [
+                {
+                    "label": "K1",
+                    "document_id": "stream.md",
+                    "chunk_id": "stream.md_chunk_0000",
+                    "chunk_index": 0,
+                    "score": 0.8,
+                    "text": "stream source",
+                }
+            ],
+        }
+        with patch("main.build_knowledge_preflight", return_value=preflight):
+            with patch("main.run_agent_stream", return_value=iter(["hello ", "there"])):
+                with TestClient(main.app) as client:
+                    login_response = client.post(
+                        "/login",
+                        json={"username": "admin", "password": "password"},
+                    )
+                    response = client.post("/chat/stream", json={"message": "hello"})
+
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, "hello there")
+        self.assertTrue(response.headers["X-Knowledge-Sources"])
+
+        conversation_id = int(response.headers["X-Conversation-Id"])
+        messages = database.list_messages(self.default_user_id(), conversation_id)
+        self.assertEqual(
+            [(message["role"], message["content"]) for message in messages],
+            [("user", "hello"), ("assistant", "hello there")],
+        )
+        self.assertEqual(messages[-1]["sources"][0]["document_id"], "stream.md")
 
     def test_chat_appends_to_existing_conversation(self):
         user_id = self.default_user_id()
@@ -189,6 +244,215 @@ class ApiAuthTests(unittest.TestCase):
             response = client.get("/files")
 
         self.assertEqual(response.status_code, 401)
+
+    def test_deepseek_balance_requires_login(self):
+        with TestClient(main.app) as client:
+            response = client.get("/billing/deepseek-balance")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_logged_in_user_can_view_deepseek_balance(self):
+        class FakeBalanceResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return (
+                    b'{"is_available":true,"balance_infos":[{"currency":"USD",'
+                    b'"total_balance":"12.34","granted_balance":"1.00",'
+                    b'"topped_up_balance":"11.34"}]}'
+                )
+
+        with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key"}):
+            with patch("main.urlopen", return_value=FakeBalanceResponse()) as urlopen_mock:
+                with TestClient(main.app) as client:
+                    client.post("/login", json={"username": "admin", "password": "password"})
+                    response = client.get("/billing/deepseek-balance")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["is_available"], True)
+        self.assertEqual(response.json()["balance_infos"][0]["currency"], "USD")
+        self.assertEqual(response.json()["balance_infos"][0]["total_balance"], "12.34")
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(request.headers["Authorization"], "Bearer test-key")
+
+    def test_index_knowledge_file_requires_login(self):
+        with TestClient(main.app) as client:
+            response = client.post(
+                "/knowledge/index-file",
+                json={"path": "ENGINEERING_NOTES.md"},
+            )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_upload_knowledge_file_requires_login(self):
+        with TestClient(main.app) as client:
+            response = client.post(
+                "/knowledge/upload",
+                files={"file": ("notes.md", b"agent tool memory", "text/markdown")},
+            )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_logged_in_user_can_upload_and_index_knowledge_file(self):
+        upload_dir = Path(self.temp_dir.name) / "knowledge_files"
+
+        with patch("knowledge.KNOWLEDGE_FILES_DIR", upload_dir):
+            with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+                with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
+                    with TestClient(main.app) as client:
+                        client.post("/login", json={"username": "admin", "password": "password"})
+                        upload_response = client.post(
+                            "/knowledge/upload",
+                            data={"notes": "deployment checklist"},
+                            files={
+                                "file": (
+                                    "notes.md",
+                                    b"agent tool memory",
+                                    "text/markdown",
+                                )
+                            },
+                        )
+                        documents_response = client.get("/knowledge/documents")
+
+        self.assertEqual(upload_response.status_code, 200)
+        self.assertEqual(upload_response.json()["document_id"], "knowledge_files__notes.md")
+        self.assertEqual(upload_response.json()["chunk_count"], 1)
+        self.assertEqual(upload_response.json()["notes"], "deployment checklist")
+        self.assertEqual(
+            documents_response.json()["documents"][0]["document_id"],
+            "knowledge_files__notes.md",
+        )
+        self.assertEqual(
+            documents_response.json()["documents"][0]["notes"],
+            "deployment checklist",
+        )
+        self.assertEqual(
+            (upload_dir / "notes.md").read_text(encoding="utf-8"),
+            "agent tool memory",
+        )
+
+    def test_upload_knowledge_file_rejects_large_file(self):
+        upload_dir = Path(self.temp_dir.name) / "knowledge_files"
+
+        with patch("knowledge.MAX_UPLOAD_BYTES", 5):
+            with patch("knowledge.KNOWLEDGE_FILES_DIR", upload_dir):
+                with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+                    with TestClient(main.app) as client:
+                        client.post("/login", json={"username": "admin", "password": "password"})
+                        response = client.post(
+                            "/knowledge/upload",
+                            files={
+                                "file": (
+                                    "large.md",
+                                    b"0123456789",
+                                    "text/markdown",
+                                )
+                            },
+                        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("larger than 50MB", response.json()["detail"])
+        self.assertFalse((upload_dir / "large.md").exists())
+
+    def test_logged_in_user_can_index_and_search_knowledge_file(self):
+        with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
+            with TestClient(main.app) as client:
+                client.post("/login", json={"username": "admin", "password": "password"})
+                index_response = client.post(
+                    "/knowledge/index-file",
+                    json={
+                        "path": "notes.md",
+                        "document_id": "notes",
+                    },
+                )
+
+                self.assertEqual(index_response.status_code, 400)
+
+        notes_path = Path(self.temp_dir.name) / "notes.md"
+        notes_path.write_text("agent tool memory", encoding="utf-8")
+
+        with patch.object(main.knowledge, "PROJECT_ROOT", Path(self.temp_dir.name)):
+            with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+                with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
+                    with TestClient(main.app) as client:
+                        client.post("/login", json={"username": "admin", "password": "password"})
+                        index_response = client.post(
+                            "/knowledge/index-file",
+                            json={
+                                "path": "notes.md",
+                                "document_id": "notes",
+                                "notes": "vector database context",
+                            },
+                        )
+                        documents_response = client.get("/knowledge/documents")
+                        search_response = client.post(
+                            "/knowledge/search",
+                            json={"query": "agent tool", "top_k": 1},
+                        )
+
+        self.assertEqual(index_response.status_code, 200)
+        self.assertEqual(index_response.json()["chunk_count"], 1)
+        self.assertEqual(index_response.json()["notes"], "vector database context")
+        self.assertEqual(
+            documents_response.json()["documents"][0]["document_id"],
+            "notes",
+        )
+        self.assertEqual(
+            documents_response.json()["documents"][0]["notes"],
+            "vector database context",
+        )
+        self.assertEqual(
+            search_response.json()["results"][0]["document_id"],
+            "notes",
+        )
+
+    def test_logged_in_user_can_delete_knowledge_document(self):
+        notes_path = Path(self.temp_dir.name) / "notes.md"
+        notes_path.write_text("agent tool memory", encoding="utf-8")
+
+        with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+            with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
+                with TestClient(main.app) as client:
+                    client.post("/login", json={"username": "admin", "password": "password"})
+                    client.post(
+                        "/knowledge/index-file",
+                        json={"path": "notes.md", "document_id": "notes"},
+                    )
+                    delete_response = client.delete("/knowledge/documents/notes")
+                    documents_response = client.get("/knowledge/documents")
+
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(documents_response.json()["documents"], [])
+
+    def test_knowledge_search_filters_by_min_score(self):
+        notes_path = Path(self.temp_dir.name) / "notes.md"
+        notes_path.write_text("agent tool memory", encoding="utf-8")
+
+        with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+            with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
+                with TestClient(main.app) as client:
+                    client.post("/login", json={"username": "admin", "password": "password"})
+                    client.post(
+                        "/knowledge/index-file",
+                        json={"path": "notes.md", "document_id": "notes"},
+                    )
+                    kept_response = client.post(
+                        "/knowledge/search",
+                        json={"query": "agent tool", "top_k": 3, "min_score": 0.3},
+                    )
+                    filtered_response = client.post(
+                        "/knowledge/search",
+                        json={"query": "agent tool", "top_k": 3, "min_score": 0.95},
+                    )
+
+        self.assertEqual(kept_response.status_code, 200)
+        self.assertEqual(len(kept_response.json()["results"]), 1)
+        self.assertEqual(filtered_response.status_code, 200)
+        self.assertEqual(filtered_response.json()["results"], [])
 
     def test_logout_clears_session(self):
         with TestClient(main.app) as client:

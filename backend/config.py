@@ -18,6 +18,12 @@ APP_USERNAME = os.environ.get("APP_USERNAME", "").strip()
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE_SECONDS", "604800"))
 DATABASE_FILE = os.environ.get("DATABASE_FILE", str(PROJECT_ROOT / "agent.db"))
+EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "").strip()
+EMBEDDING_BASE_URL = os.environ.get(
+    "EMBEDDING_BASE_URL",
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+).strip()
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-v4").strip()
 
 MAX_HISTORY_MESSAGES = 20
 MAX_FILE_READ_LINES_PER_TURN = 120
@@ -35,6 +41,11 @@ SYSTEM_MESSAGE = {
         "You are a project assistant inside a private web console. "
         "Answer the user's question directly in Chinese when the user writes Chinese. "
         "Use tools only when they are necessary for the user's request. "
+        "Every user message includes a Knowledge base preflight result before the user question. "
+        "Use that preflight first: if it says no supported knowledge evidence was found, begin by saying the knowledge base does not contain enough relevant evidence, then answer with general knowledge when appropriate. "
+        "If the preflight contains snippets, first check whether they are actually about the user's question. If they are unrelated or insufficient, say the knowledge base does not contain enough relevant evidence. "
+        "Only cite the provided source labels such as [K1] for claims directly supported by the matching snippet. "
+        "Do not add unsupported details from general knowledge when a knowledge-base answer is requested. "
         "Do not inspect project files just because the user asks a casual identity question like 'who am I'. "
         "For that, answer that they are the signed-in user you are chatting with, and explain that you do not know more personal identity unless the app provides it."
     ),

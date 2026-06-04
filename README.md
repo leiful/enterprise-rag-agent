@@ -32,9 +32,13 @@ frontend/.env.example  Frontend environment template
 
 Create `.env` in the project root. `DEEPSEEK_API_KEY` is used by the backend to call
 the model provider. `APP_USERNAME` and `APP_PASSWORD` are used for local login.
+`EMBEDDING_API_KEY` is used for vector search embeddings.
 
 ```env
 DEEPSEEK_API_KEY=your_api_key_here
+EMBEDDING_API_KEY=your_dashscope_api_key_here
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
 APP_USERNAME=admin
 APP_PASSWORD=change_this_local_password
 SESSION_MAX_AGE_SECONDS=604800
@@ -119,6 +123,77 @@ uses `agent.db` in the project root. The database contains:
 ```text
 users      usernames and password hashes
 sessions   random session ids, user ids, and expiration times
+vector_chunks  document chunks and embedding vectors for vector search
+```
+
+## Vector Search
+
+The backend has a small SQLite vector store in `backend/vector_store.py`.
+It uses the OpenAI-compatible embeddings API, so Alibaba Cloud Model Studio
+works with:
+
+```env
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+```
+
+Basic usage from the project root:
+
+```powershell
+.\.venv\Scripts\python.exe
+```
+
+```python
+import sys
+sys.path.insert(0, "backend")
+
+import vector_store
+
+vector_store.init_vector_store()
+vector_store.upsert_document(
+    "agent_intro",
+    "AI Agent needs tool calling, memory, planning, and reflection."
+)
+
+results = vector_store.search("how to learn agent tools")
+for result in results:
+    print(result.score, result.document_id, result.text)
+```
+
+## RAG Evaluation
+
+The repository includes a small RAG evaluation pack in `rag_eval/`.
+
+```text
+rag_eval/sample_docs/   Markdown documents for upload
+rag_eval/questions.json Evaluation questions and expected source documents
+scripts/rag_eval.py     Uploads docs, asks questions, and writes reports
+```
+
+Start the backend first, then run from the project root:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\rag_eval.py
+```
+
+The script reads `APP_USERNAME` and `APP_PASSWORD` from `.env`, uploads the
+sample documents, calls `/knowledge/search` and `/chat`, then writes JSON, CSV,
+and Markdown reports under `rag_eval/reports/`.
+
+Useful options:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\rag_eval.py --skip-upload
+.\.venv\Scripts\python.exe scripts\rag_eval.py --skip-chat
+.\.venv\Scripts\python.exe scripts\rag_eval.py --top-k 5 --min-score 0.4
+```
+
+Convert a small public RAG benchmark JSONL sample into local eval files:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\rag_benchmark_download.py --config emanual --split test --limit 5
+.\.venv\Scripts\python.exe scripts\rag_benchmark_prepare.py
+.\.venv\Scripts\python.exe scripts\rag_eval.py --docs-dir rag_eval\generated\docs --questions rag_eval\generated\questions.json
 ```
 
 Requests without a login session are rejected:

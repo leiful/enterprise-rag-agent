@@ -1,13 +1,30 @@
-﻿import tempfile
-import unittest
+﻿import unittest
 from contextlib import redirect_stdout
 from io import StringIO
-from pathlib import Path
-from unittest.mock import patch
 from types import SimpleNamespace
+from unittest.mock import patch
 
-import tools
-from AI_agent import main, run_agent, run_tool_call
+from AI_agent import (
+    KNOWLEDGE_PREFLIGHT_PREFIX,
+    build_user_message_with_knowledge_preflight,
+    main,
+    run_agent,
+    run_agent_stream,
+    run_tool_call,
+)
+from config import SYSTEM_MESSAGE
+
+
+def knowledge_preflight(text="No supported knowledge evidence was found.", sources=None):
+    return {
+        "content": (
+            f"{KNOWLEDGE_PREFLIGHT_PREFIX}\n"
+            f"{text}\n\n"
+            "User question:\n"
+            "patched question"
+        ),
+        "sources": sources or [],
+    }
 
 
 def make_tool_call(name, arguments):
@@ -42,6 +59,14 @@ def make_response(message):
     )
 
 
+def make_stream_chunk(content):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(delta=SimpleNamespace(content=content)),
+        ],
+    )
+
+
 class RunToolCallTests(unittest.TestCase):
     def test_get_time_returns_result(self):
         tool_call = make_tool_call("get_time", "{}")
@@ -67,256 +92,158 @@ class RunToolCallTests(unittest.TestCase):
         self.assertFalse(denied_by_user)
 
     def test_missing_required_argument_returns_clear_error(self):
-        tool_call = make_tool_call("read_file", "{}")
+        tool_call = make_tool_call("search_knowledge", "{}")
 
         tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(tool_call, 10)
 
         self.assertEqual(tool_args, {})
         self.assertEqual(
             tool_result,
-            "read_file error: missing required argument 'path'.",
+            "search_knowledge error: missing required argument 'query'.",
         )
         self.assertEqual(remaining_lines, 10)
         self.assertFalse(denied_by_user)
 
-    def test_read_file_consumes_remaining_line_budget(self):
-        tool_call = make_tool_call(
-            "read_file",
-            '{"path": "AI_agent.py", "max_lines": 5}',
-        )
-
-        tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(tool_call, 10)
-
-        self.assertEqual(tool_args["max_lines"], 5)
-        self.assertIn("Showing AI_agent.py lines 1-5", tool_result)
-        self.assertEqual(remaining_lines, 5)
-        self.assertFalse(denied_by_user)
-
-    def test_read_file_respects_remaining_line_budget(self):
-        tool_call = make_tool_call(
-            "read_file",
-            '{"path": "AI_agent.py", "max_lines": 20}',
-        )
-
-        tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(tool_call, 7)
-
-        self.assertEqual(tool_args["max_lines"], 7)
-        self.assertIn("Showing AI_agent.py lines 1-7", tool_result)
-        self.assertEqual(remaining_lines, 0)
-        self.assertFalse(denied_by_user)
-
-    def test_read_file_stops_when_budget_is_exhausted(self):
-        tool_call = make_tool_call(
-            "read_file",
-            '{"path": "AI_agent.py", "max_lines": 5}',
-        )
-
-        tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(tool_call, 0)
-
-        self.assertEqual(tool_args["max_lines"], 5)
-        self.assertEqual(
-            tool_result,
-            "read_file error: per-turn file read limit reached. "
-            "Ask to continue in the next message.",
-        )
-        self.assertEqual(remaining_lines, 0)
-        self.assertFalse(denied_by_user)
-
-    def test_write_file_requires_confirmation_and_can_be_denied(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            tool_call = make_tool_call(
-                "write_file",
-                '{"path": "notes.txt", "content": "hello"}',
-            )
-
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
-                    tool_call,
-                    10,
-                    confirm_callback=lambda name, args: False,
-                )
-
-            self.assertEqual(tool_args, {"path": "notes.txt", "content": "hello"})
-            self.assertEqual(
-                tool_result,
-                "write_file denied by user. Do not try another file modification tool for this request.",
-            )
-            self.assertEqual(remaining_lines, 10)
-            self.assertTrue(denied_by_user)
-            self.assertFalse((workspace / "notes.txt").exists())
-
-    def test_write_file_runs_after_confirmation(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            tool_call = make_tool_call(
-                "write_file",
-                '{"path": "notes.txt", "content": "hello"}',
-            )
-
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
-                    tool_call,
-                    10,
-                    confirm_callback=lambda name, args: True,
-                )
-
-            self.assertEqual(tool_args, {"path": "notes.txt", "content": "hello"})
-            self.assertEqual(tool_result, "Wrote notes.txt (1 line(s)).")
-            self.assertEqual(remaining_lines, 10)
-            self.assertFalse(denied_by_user)
-            self.assertEqual((workspace / "notes.txt").read_text(encoding="utf-8"), "hello")
-
-    def test_replace_in_file_requires_confirmation_and_can_be_denied(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            (workspace / "notes.txt").write_text("old", encoding="utf-8")
-            tool_call = make_tool_call(
-                "replace_in_file",
-                '{"path": "notes.txt", "old_text": "old", "new_text": "new"}',
-            )
-
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
-                    tool_call,
-                    10,
-                    confirm_callback=lambda name, args: False,
-                )
-
-            self.assertEqual(
-                tool_args,
-                {"path": "notes.txt", "old_text": "old", "new_text": "new"},
-            )
-            self.assertEqual(
-                tool_result,
-                "replace_in_file denied by user. Do not try another file modification tool for this request.",
-            )
-            self.assertEqual(remaining_lines, 10)
-            self.assertTrue(denied_by_user)
-            self.assertEqual((workspace / "notes.txt").read_text(encoding="utf-8"), "old")
-
-    def test_replace_in_file_runs_after_confirmation(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            (workspace / "notes.txt").write_text("old", encoding="utf-8")
-            tool_call = make_tool_call(
-                "replace_in_file",
-                '{"path": "notes.txt", "old_text": "old", "new_text": "new"}',
-            )
-
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
-                    tool_call,
-                    10,
-                    confirm_callback=lambda name, args: True,
-                )
-
-            self.assertEqual(
-                tool_args,
-                {"path": "notes.txt", "old_text": "old", "new_text": "new"},
-            )
-            self.assertEqual(tool_result, "Replaced 1 occurrence in notes.txt.")
-            self.assertEqual(remaining_lines, 10)
-            self.assertFalse(denied_by_user)
-            self.assertEqual((workspace / "notes.txt").read_text(encoding="utf-8"), "new")
-
-    def test_delete_file_requires_confirmation_and_can_be_denied(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            (workspace / "notes.txt").write_text("hello", encoding="utf-8")
-            tool_call = make_tool_call(
-                "delete_file",
-                '{"path": "notes.txt"}',
-            )
-
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
-                    tool_call,
-                    10,
-                    confirm_callback=lambda name, args: False,
-                )
-
-            self.assertEqual(tool_args, {"path": "notes.txt"})
-            self.assertEqual(
-                tool_result,
-                "delete_file denied by user. Do not try another file modification tool for this request.",
-            )
-            self.assertEqual(remaining_lines, 10)
-            self.assertTrue(denied_by_user)
-            self.assertTrue((workspace / "notes.txt").exists())
-
-    def test_delete_file_runs_after_confirmation(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            (workspace / "notes.txt").write_text("hello", encoding="utf-8")
-            tool_call = make_tool_call(
-                "delete_file",
-                '{"path": "notes.txt"}',
-            )
-
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(
-                    tool_call,
-                    10,
-                    confirm_callback=lambda name, args: True,
-                )
-
-            self.assertEqual(tool_args, {"path": "notes.txt"})
-            self.assertEqual(tool_result, "Deleted notes.txt.")
-            self.assertEqual(remaining_lines, 10)
-            self.assertFalse(denied_by_user)
-            self.assertFalse((workspace / "notes.txt").exists())
-
 
 class RunAgentTests(unittest.TestCase):
-    def test_run_agent_stops_after_user_denies_file_modification(self):
-        write_call = make_tool_call(
-            "write_file",
-            '{"path": "abc.txt", "content": "new", "overwrite": true}',
-        )
-        first_message = make_message(tool_calls=[write_call])
-        second_message = make_message(
-            content="I should not be reached",
+    def test_build_user_message_with_knowledge_preflight(self):
+        with patch(
+            "AI_agent.build_knowledge_preflight",
+            return_value={
+                "content": (
+                    f"{KNOWLEDGE_PREFLIGHT_PREFIX}\n"
+                    "No supported knowledge evidence was found.\n\n"
+                    "User question:\n"
+                    "who is trump?"
+                ),
+                "sources": [],
+            },
+        ):
+            message = build_user_message_with_knowledge_preflight("who is trump?")
+
+        self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, message)
+        self.assertIn("No supported knowledge evidence was found.", message)
+        self.assertIn("User question:\nwho is trump?", message)
+
+    def test_run_agent_uses_tool_result_then_returns_answer(self):
+        first_message = make_message(
             tool_calls=[
-                make_tool_call(
-                    "replace_in_file",
-                    '{"path": "abc.txt", "old_text": "old", "new_text": "new"}',
-                )
+                make_tool_call("get_time", "{}"),
             ],
         )
+        second_message = make_message(content="The current time was checked.")
+        calls = [make_response(first_message), make_response(second_message)]
         client = SimpleNamespace(
             chat=SimpleNamespace(
                 completions=SimpleNamespace(
-                    create=SimpleNamespace(
-                        side_effect=None,
-                    )
-                )
-            )
+                    create=lambda **kwargs: calls.pop(0),
+                ),
+            ),
         )
-        calls = [make_response(first_message), make_response(second_message)]
-
-        def create_response(**kwargs):
-            return calls.pop(0)
-
-        client.chat.completions.create = create_response
         messages = [{"role": "system", "content": "test"}]
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir)
-            (workspace / "abc.txt").write_text("old", encoding="utf-8")
+        with patch(
+            "AI_agent.build_knowledge_preflight",
+            return_value={
+                "content": (
+                    f"{KNOWLEDGE_PREFLIGHT_PREFIX}\n"
+                    "No supported knowledge evidence was found.\n\n"
+                    "User question:\n"
+                    "what time is it?"
+                ),
+                "sources": [],
+            },
+        ):
+            with patch("AI_agent.append_log_entries"):
+                with redirect_stdout(StringIO()):
+                    answer = run_agent(client, messages, "what time is it?")
 
-            with patch.object(tools, "WORKSPACE_ROOT", workspace):
-                with patch("AI_agent.confirm_tool_call", return_value=False):
-                    with patch("AI_agent.append_log_entries"):
-                        with redirect_stdout(StringIO()):
-                            answer = run_agent(client, messages, "change abc")
+        self.assertEqual(answer, "The current time was checked.")
+        self.assertEqual(len(calls), 0)
+        self.assertTrue(any(message.get("role") == "tool" for message in messages))
+        self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, messages[1]["content"])
+        self.assertIn("User question:\nwhat time is it?", messages[1]["content"])
 
-            self.assertEqual(
-                answer,
-                "File modification was cancelled. No other write, edit, or delete tool was attempted.",
-            )
-            self.assertEqual((workspace / "abc.txt").read_text(encoding="utf-8"), "old")
-            self.assertEqual(len(calls), 1)
+    def test_run_agent_preflights_ordinary_questions_before_model_call(self):
+        first_message = make_message(content="Knowledge base has no evidence. Trump is...")
+        captured_messages = []
+
+        def create_completion(**kwargs):
+            captured_messages.append(kwargs["messages"])
+            return make_response(first_message)
+
+        client = SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=create_completion,
+                ),
+            ),
+        )
+        messages = [{"role": "system", "content": "test"}]
+
+        with patch(
+            "AI_agent.build_knowledge_preflight",
+            return_value={
+                "content": (
+                    f"{KNOWLEDGE_PREFLIGHT_PREFIX}\n"
+                    "No supported knowledge evidence was found.\n\n"
+                    "User question:\n"
+                    "who is trump?"
+                ),
+                "sources": [],
+            },
+        ):
+            with redirect_stdout(StringIO()):
+                with patch("AI_agent.append_log_entries"):
+                    answer = run_agent(client, messages, "who is trump?")
+
+        self.assertEqual(answer, "Knowledge base has no evidence. Trump is...")
+        self.assertEqual(len(captured_messages), 1)
+        self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, captured_messages[0][1]["content"])
+        self.assertIn("User question:\nwho is trump?", captured_messages[0][1]["content"])
+
+    def test_run_agent_stream_streams_final_answer_after_tool_check(self):
+        first_message = make_message(content="Draft answer")
+        calls = [make_response(first_message)]
+        stream_chunks = [
+            make_stream_chunk("hello "),
+            make_stream_chunk("there"),
+        ]
+
+        def create_completion(**kwargs):
+            if kwargs.get("stream"):
+                return iter(stream_chunks)
+
+            return calls.pop(0)
+
+        client = SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=create_completion,
+                ),
+            ),
+        )
+        messages = [{"role": "system", "content": "test"}]
+
+        with patch(
+            "AI_agent.build_knowledge_preflight",
+            return_value={
+                "content": (
+                    f"{KNOWLEDGE_PREFLIGHT_PREFIX}\n"
+                    "No supported knowledge evidence was found.\n\n"
+                    "User question:\n"
+                    "hello"
+                ),
+                "sources": [],
+            },
+        ):
+            with patch("AI_agent.append_log_entries"):
+                answer = "".join(run_agent_stream(client, messages, "hello"))
+
+        self.assertEqual(answer, "hello there")
+        self.assertEqual(messages[-1], {"role": "assistant", "content": "hello there"})
+        self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, messages[1]["content"])
+
 
 class MainTests(unittest.TestCase):
     def test_main_prints_startup_error_when_api_key_is_missing(self):
@@ -330,6 +257,16 @@ class MainTests(unittest.TestCase):
             "Startup error: Missing DEEPSEEK_API_KEY. Please set it in .env.",
             output.getvalue(),
         )
+
+
+class SystemMessageTests(unittest.TestCase):
+    def test_system_message_requires_cited_knowledge_answers(self):
+        content = SYSTEM_MESSAGE["content"]
+
+        self.assertIn("Every user message includes a Knowledge base preflight result", content)
+        self.assertIn("begin by saying the knowledge base does not contain enough relevant evidence", content)
+        self.assertIn("Only cite the provided source labels such as [K1]", content)
+        self.assertIn("Do not add unsupported details", content)
 
 
 if __name__ == "__main__":

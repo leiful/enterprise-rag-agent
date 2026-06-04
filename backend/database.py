@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import hashlib
+import json
 import os
 import secrets
 import sqlite3
@@ -94,8 +95,36 @@ def init_db():
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS vector_chunks (
+                id TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                embedding_json TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_vector_chunks_document_id
+            ON vector_chunks(document_id);
+
+            CREATE TABLE IF NOT EXISTS knowledge_documents (
+                document_id TEXT PRIMARY KEY,
+                notes TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
         )
+
+        message_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(messages)").fetchall()
+        }
+        if "sources_json" not in message_columns:
+            connection.execute("ALTER TABLE messages ADD COLUMN sources_json TEXT")
 
     create_default_user()
 
@@ -237,14 +266,15 @@ def touch_conversation(user_id, conversation_id):
         )
 
 
-def add_message(conversation_id, role, content):
+def add_message(conversation_id, role, content, sources=None):
+    sources_json = json.dumps(sources or [], ensure_ascii=False) if sources is not None else None
     with connect() as connection:
         cursor = connection.execute(
             """
-            INSERT INTO messages (conversation_id, role, content, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO messages (conversation_id, role, content, sources_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (conversation_id, role, content, utc_now_iso()),
+            (conversation_id, role, content, sources_json, utc_now_iso()),
         )
         return cursor.lastrowid
 
@@ -253,7 +283,7 @@ def list_messages(user_id, conversation_id):
     with connect() as connection:
         rows = connection.execute(
             """
-            SELECT messages.id, messages.role, messages.content, messages.created_at
+            SELECT messages.id, messages.role, messages.content, messages.sources_json, messages.created_at
             FROM messages
             JOIN conversations ON conversations.id = messages.conversation_id
             WHERE messages.conversation_id = ? AND conversations.user_id = ?
@@ -262,4 +292,17 @@ def list_messages(user_id, conversation_id):
             (conversation_id, user_id),
         ).fetchall()
 
-    return [dict(row) for row in rows]
+    messages = []
+    for row in rows:
+        message = dict(row)
+        sources_json = message.pop("sources_json", None)
+        if sources_json:
+            try:
+                message["sources"] = json.loads(sources_json)
+            except json.JSONDecodeError:
+                message["sources"] = []
+        else:
+            message["sources"] = []
+        messages.append(message)
+
+    return messages
