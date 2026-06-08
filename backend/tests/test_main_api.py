@@ -1,25 +1,32 @@
-import tempfile
+import warnings
 import unittest
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Using `httpx` with `starlette\.testclient` is deprecated; install `httpx2` instead\.",
+    category=Warning,
+)
 
 from fastapi.testclient import TestClient
 
 import database
 import main
-from test_vector_store import FakeEmbeddingClient
+import vector_store
+from tests.test_db_utils import patched_postgres_database
+from tests.test_vector_store import FakeEmbeddingClient
 
 
 class ApiAuthTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.database_file = str(Path(self.temp_dir.name) / "test-agent.db")
-        self.database_patch = patch.object(database, "DATABASE_FILE", self.database_file)
         self.username_patch = patch.object(main, "APP_USERNAME", "admin")
         self.password_patch = patch.object(main, "APP_PASSWORD", "password")
         self.db_username_patch = patch.object(database, "APP_USERNAME", "admin")
         self.db_password_patch = patch.object(database, "APP_PASSWORD", "password")
         self.create_client_patch = patch.object(main, "create_client", return_value=object())
+        self.rerank_key_patch = patch("services.rerank_service.RERANK_API_KEY", "")
         self.run_agent_patch = patch.object(
             main,
             "run_agent",
@@ -38,29 +45,38 @@ class ApiAuthTests(unittest.TestCase):
             },
         )
 
-        self.database_patch.start()
+        self.database_context = patched_postgres_database()
+        self.temp_dir = TemporaryDirectory()
+        self.database_context.__enter__()
         self.username_patch.start()
         self.password_patch.start()
         self.db_username_patch.start()
         self.db_password_patch.start()
         self.create_client_patch.start()
+        self.rerank_key_patch.start()
         self.run_agent_patch.start()
-        database.init_db()
 
     def tearDown(self):
+        main.login_failures.clear()
+        with main.chat_admission_lock:
+            main.active_chat_total = 0
+            main.active_chat_by_user.clear()
+            main.active_chat_by_conversation.clear()
+        vector_store.clear_runtime_caches()
         self.run_agent_patch.stop()
+        self.rerank_key_patch.stop()
         self.create_client_patch.stop()
         self.db_password_patch.stop()
         self.db_username_patch.stop()
         self.password_patch.stop()
         self.username_patch.stop()
-        self.database_patch.stop()
+        self.database_context.__exit__(None, None, None)
         self.temp_dir.cleanup()
 
     def session_exists(self, session_id):
         with database.connect() as connection:
             row = connection.execute(
-                "SELECT id FROM sessions WHERE id = ?",
+                "SELECT id FROM sessions WHERE id = %s",
                 (session_id,),
             ).fetchone()
         return row is not None
@@ -70,18 +86,71 @@ class ApiAuthTests(unittest.TestCase):
         self.assertIsNotNone(user)
         return user["id"]
 
+    def wait_for_job(self, client, job_id):
+        response = client.get(f"/knowledge/index-jobs/{job_id}")
+        self.assertEqual(response.status_code, 200)
+        return response
+
     def test_health_does_not_require_login(self):
         with TestClient(main.app) as client:
             response = client.get("/health")
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("checks", response.json())
+
+    def test_health_reports_config_warnings(self):
+        issues = [
+            {
+                "name": "APP_PASSWORD",
+                "severity": "warning",
+                "message": "weak password",
+            }
+        ]
+
+        with patch.object(main, "validate_runtime_config", return_value=issues):
+            with TestClient(main.app) as client:
+                response = client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "degraded")
+        self.assertEqual(response.json()["checks"]["config"]["status"], "warning")
+        self.assertEqual(response.json()["checks"]["config"]["issues"], issues)
+
+    def test_health_reports_config_errors(self):
+        issues = [
+            {
+                "name": "VECTOR_STORE_BACKEND",
+                "severity": "error",
+                "message": "invalid backend",
+            }
+        ]
+
+        with patch.object(main, "validate_runtime_config", return_value=issues):
+            with TestClient(main.app) as client:
+                response = client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "error")
+        self.assertEqual(response.json()["checks"]["config"]["status"], "error")
+
+    def test_health_reports_database_errors(self):
+        with patch.object(main, "get_database_health", return_value={"status": "error", "error": "db failed"}):
+            with TestClient(main.app) as client:
+                response = client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "error")
+        self.assertEqual(response.json()["checks"]["database"]["status"], "error")
 
     def test_me_reports_signed_out_without_session(self):
         with TestClient(main.app) as client:
             response = client.get("/me")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"authenticated": False, "username": None})
+        self.assertEqual(
+            response.json(),
+            {"authenticated": False, "username": None, "role": None, "departments": []},
+        )
 
     def test_login_rejects_invalid_password(self):
         with TestClient(main.app) as client:
@@ -92,6 +161,28 @@ class ApiAuthTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_login_rate_limits_repeated_failures(self):
+        with patch.object(main, "LOGIN_MAX_FAILED_ATTEMPTS", 2):
+            with patch.object(main, "LOGIN_LOCKOUT_SECONDS", 60):
+                with TestClient(main.app) as client:
+                    first_response = client.post(
+                        "/login",
+                        json={"username": "admin", "password": "wrong"},
+                    )
+                    second_response = client.post(
+                        "/login",
+                        json={"username": "admin", "password": "wrong"},
+                    )
+                    third_response = client.post(
+                        "/login",
+                        json={"username": "admin", "password": "wrong"},
+                    )
+
+        self.assertEqual(first_response.status_code, 401)
+        self.assertEqual(second_response.status_code, 401)
+        self.assertEqual(third_response.status_code, 429)
+        self.assertEqual(third_response.headers["Retry-After"], "60")
+
     def test_login_accepts_valid_credentials(self):
         with TestClient(main.app) as client:
             response = client.post(
@@ -100,10 +191,34 @@ class ApiAuthTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"authenticated": True, "username": "admin"})
+        self.assertEqual(
+            response.json(),
+            {"authenticated": True, "username": "admin", "role": "admin", "departments": []},
+        )
         self.assertIn(main.SESSION_COOKIE, response.cookies)
         self.assertIn("Max-Age=604800", response.headers["set-cookie"])
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
+        self.assertIn("SameSite=lax", response.headers["set-cookie"])
         self.assertTrue(self.session_exists(response.cookies[main.SESSION_COOKIE]))
+
+    def test_login_can_set_secure_cookie_for_https_deployments(self):
+        with patch.object(main, "SESSION_COOKIE_SECURE", True):
+            with TestClient(main.app) as client:
+                response = client.post(
+                    "/login",
+                    json={"username": "admin", "password": "password"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Secure", response.headers["set-cookie"])
+
+    def test_responses_include_security_headers(self):
+        with TestClient(main.app) as client:
+            response = client.get("/health")
+
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
 
     def test_login_creates_random_session_ids(self):
         with TestClient(main.app) as client:
@@ -120,6 +235,71 @@ class ApiAuthTests(unittest.TestCase):
             first_response.cookies[main.SESSION_COOKIE],
             second_response.cookies[main.SESSION_COOKIE],
         )
+
+    def test_admin_can_manage_departments(self):
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            create_response = client.post("/admin/departments", json={"name": "Finance"})
+            list_response = client.get("/admin/departments")
+            audit_response = client.get("/admin/audit")
+            delete_response = client.delete(f"/admin/departments/{create_response.json()['department']['id']}")
+
+        self.assertEqual(create_response.status_code, 200)
+        self.assertEqual(list_response.json()["departments"][0]["name"], "Finance")
+        self.assertEqual(audit_response.status_code, 200)
+        self.assertEqual(audit_response.json()["events"][0]["action"], "department.create")
+        self.assertEqual(audit_response.json()["events"][0]["details"]["name"], "Finance")
+        self.assertEqual(delete_response.status_code, 200)
+
+    def test_create_user_rejects_unknown_department(self):
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            response = client.post(
+                "/admin/users",
+                json={
+                    "username": "analyst",
+                    "password": "long-enough-password",
+                    "role": "user",
+                    "departments": ["Unknown"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_admin_can_update_user_department(self):
+        user = database.create_user(
+            "employee",
+            "strong-password-123",
+            "user",
+            departments=["Finance"],
+        )
+        database.create_department("User Edit Support")
+
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            response = client.patch(
+                f"/admin/users/{user['id']}",
+                json={"role": "user", "departments": ["User Edit Support"]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["departments"], ["User Edit Support"])
+
+    def test_create_user_requires_department(self):
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            response = client.post(
+                "/admin/users",
+                json={
+                    "username": "analyst",
+                    "password": "long-enough-password",
+                    "role": "user",
+                    "departments": [],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
 
     def test_chat_rejects_missing_session(self):
         with TestClient(main.app) as client:
@@ -184,6 +364,25 @@ class ApiAuthTests(unittest.TestCase):
             [("user", "hello"), ("assistant", "hello there")],
         )
         self.assertEqual(messages[-1]["sources"][0]["document_id"], "stream.md")
+
+    def test_chat_rejects_when_user_already_has_running_request(self):
+        with patch.object(main, "CHAT_MAX_CONCURRENT_PER_USER", 1):
+            with TestClient(main.app) as client:
+                client.post("/login", json={"username": "admin", "password": "password"})
+                conversation_id = database.create_conversation(self.default_user_id(), "Busy")
+                with main.ChatAdmission(self.default_user_id(), conversation_id):
+                    response = client.post("/chat", json={"message": "hello"})
+
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("already have a chat request running", response.json()["detail"])
+
+    def test_chat_admission_is_released_after_request(self):
+        with TestClient(main.app) as client:
+            client.post("/login", json={"username": "admin", "password": "password"})
+            response = client.post("/chat", json={"message": "hello"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(main.current_chat_admission_status()["active"], 0)
 
     def test_chat_appends_to_existing_conversation(self):
         user_id = self.default_user_id()
@@ -316,15 +515,18 @@ class ApiAuthTests(unittest.TestCase):
                                 )
                             },
                         )
+                        job_response = self.wait_for_job(client, upload_response.json()["job_id"])
                         documents_response = client.get("/knowledge/documents")
 
-        self.assertEqual(upload_response.status_code, 200)
-        self.assertEqual(upload_response.json()["document_id"], "knowledge_files__notes.md")
-        self.assertEqual(upload_response.json()["chunk_count"], 1)
-        self.assertEqual(upload_response.json()["notes"], "deployment checklist")
+        self.assertEqual(upload_response.status_code, 202)
+        self.assertEqual(upload_response.json()["document_id"], "notes.md")
+        self.assertEqual(job_response.json()["status"], "completed")
+        self.assertEqual(job_response.json()["result"]["document_id"], "notes.md")
+        self.assertEqual(job_response.json()["result"]["chunk_count"], 1)
+        self.assertEqual(job_response.json()["result"]["notes"], "deployment checklist")
         self.assertEqual(
             documents_response.json()["documents"][0]["document_id"],
-            "knowledge_files__notes.md",
+            "notes.md",
         )
         self.assertEqual(
             documents_response.json()["documents"][0]["notes"],
@@ -358,6 +560,22 @@ class ApiAuthTests(unittest.TestCase):
         self.assertIn("larger than 50MB", response.json()["detail"])
         self.assertFalse((upload_dir / "large.md").exists())
 
+    def test_upload_knowledge_file_rejects_reserved_windows_name(self):
+        upload_dir = Path(self.temp_dir.name) / "knowledge_files"
+
+        with patch("knowledge.KNOWLEDGE_FILES_DIR", upload_dir):
+            with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+                with TestClient(main.app) as client:
+                    client.post("/login", json={"username": "admin", "password": "password"})
+                    response = client.post(
+                        "/knowledge/upload",
+                        files={"file": ("CON.txt", b"agent tool memory", "text/plain")},
+                    )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "file extension is not supported")
+        self.assertFalse((upload_dir / "CON.txt").exists())
+
     def test_logged_in_user_can_index_and_search_knowledge_file(self):
         with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
             with TestClient(main.app) as client:
@@ -388,15 +606,17 @@ class ApiAuthTests(unittest.TestCase):
                                 "notes": "vector database context",
                             },
                         )
+                        job_response = self.wait_for_job(client, index_response.json()["job_id"])
                         documents_response = client.get("/knowledge/documents")
                         search_response = client.post(
                             "/knowledge/search",
-                            json={"query": "agent tool", "top_k": 1},
+                            json={"query": "agent tool", "top_k": 1, "min_score": 0},
                         )
 
-        self.assertEqual(index_response.status_code, 200)
-        self.assertEqual(index_response.json()["chunk_count"], 1)
-        self.assertEqual(index_response.json()["notes"], "vector database context")
+        self.assertEqual(index_response.status_code, 202)
+        self.assertEqual(job_response.json()["status"], "completed")
+        self.assertEqual(job_response.json()["result"]["chunk_count"], 1)
+        self.assertEqual(job_response.json()["result"]["notes"], "vector database context")
         self.assertEqual(
             documents_response.json()["documents"][0]["document_id"],
             "notes",
@@ -410,6 +630,42 @@ class ApiAuthTests(unittest.TestCase):
             "notes",
         )
 
+    def test_index_knowledge_file_rejects_invalid_metadata_before_queueing(self):
+        notes_path = Path(self.temp_dir.name) / "notes.md"
+        notes_path.write_text("agent tool memory", encoding="utf-8")
+
+        with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+            with TestClient(main.app) as client:
+                client.post("/login", json={"username": "admin", "password": "password"})
+                response = client.post(
+                    "/knowledge/index-file",
+                    json={
+                        "path": "notes.md",
+                        "document_id": "notes",
+                        "metadata": {"sensitivity": "secret"},
+                    },
+                )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("metadata.sensitivity must be one of", response.json()["detail"])
+
+    def test_upload_knowledge_file_rejects_malformed_metadata_json(self):
+        upload_dir = Path(self.temp_dir.name) / "knowledge_files"
+
+        with patch("knowledge.KNOWLEDGE_FILES_DIR", upload_dir):
+            with patch("knowledge.PROJECT_ROOT", Path(self.temp_dir.name)):
+                with TestClient(main.app) as client:
+                    client.post("/login", json={"username": "admin", "password": "password"})
+                    response = client.post(
+                        "/knowledge/upload",
+                        data={"metadata": "{not-json"},
+                        files={"file": ("notes.md", b"agent tool memory", "text/markdown")},
+                    )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("metadata must be valid JSON", response.json()["detail"])
+        self.assertFalse((upload_dir / "notes.md").exists())
+
     def test_logged_in_user_can_delete_knowledge_document(self):
         notes_path = Path(self.temp_dir.name) / "notes.md"
         notes_path.write_text("agent tool memory", encoding="utf-8")
@@ -418,10 +674,11 @@ class ApiAuthTests(unittest.TestCase):
             with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
                 with TestClient(main.app) as client:
                     client.post("/login", json={"username": "admin", "password": "password"})
-                    client.post(
+                    index_response = client.post(
                         "/knowledge/index-file",
                         json={"path": "notes.md", "document_id": "notes"},
                     )
+                    self.wait_for_job(client, index_response.json()["job_id"])
                     delete_response = client.delete("/knowledge/documents/notes")
                     documents_response = client.get("/knowledge/documents")
 
@@ -436,17 +693,18 @@ class ApiAuthTests(unittest.TestCase):
             with patch("vector_store.EmbeddingClient", return_value=FakeEmbeddingClient()):
                 with TestClient(main.app) as client:
                     client.post("/login", json={"username": "admin", "password": "password"})
-                    client.post(
+                    index_response = client.post(
                         "/knowledge/index-file",
                         json={"path": "notes.md", "document_id": "notes"},
                     )
+                    self.wait_for_job(client, index_response.json()["job_id"])
                     kept_response = client.post(
                         "/knowledge/search",
-                        json={"query": "agent tool", "top_k": 3, "min_score": 0.3},
+                        json={"query": "agent tool", "top_k": 3, "min_score": 0},
                     )
                     filtered_response = client.post(
                         "/knowledge/search",
-                        json={"query": "agent tool", "top_k": 3, "min_score": 0.95},
+                        json={"query": "agent tool", "top_k": 3, "min_score": 1.01},
                     )
 
         self.assertEqual(kept_response.status_code, 200)
@@ -462,17 +720,20 @@ class ApiAuthTests(unittest.TestCase):
             chat_response = client.post("/chat", json={"message": "hello"})
 
         self.assertEqual(logout_response.status_code, 200)
-        self.assertEqual(logout_response.json(), {"authenticated": False, "username": None})
+        self.assertEqual(
+            logout_response.json(),
+            {"authenticated": False, "username": None, "role": None, "departments": []},
+        )
         self.assertEqual(chat_response.status_code, 401)
         self.assertFalse(self.session_exists(session_id))
 
     def test_protected_routes_fail_when_login_config_is_missing(self):
         with patch.object(main, "APP_PASSWORD", ""):
             with TestClient(main.app) as client:
+                client.cookies.set(main.SESSION_COOKIE, main.create_session(self.default_user_id()))
                 response = client.post(
                     "/chat",
                     json={"message": "hello"},
-                    cookies={main.SESSION_COOKIE: main.create_session(self.default_user_id())},
                 )
 
         self.assertEqual(response.status_code, 503)
@@ -484,10 +745,10 @@ class ApiAuthTests(unittest.TestCase):
             fake_time.time.return_value = 100 + main.SESSION_MAX_AGE_SECONDS + 1
 
             with TestClient(main.app) as client:
+                client.cookies.set(main.SESSION_COOKIE, session_id)
                 response = client.post(
                     "/chat",
                     json={"message": "hello"},
-                    cookies={main.SESSION_COOKIE: session_id},
                 )
 
         self.assertEqual(response.status_code, 401)

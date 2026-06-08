@@ -15,7 +15,7 @@ def has_tool_calls(message):
 
 
 def append_log_entries(entries):
-    # SQLite stores chat history; this JSONL file is only for debugging events.
+    # PostgreSQL stores chat history; this JSONL file is only for debugging events.
     timestamp = datetime.now().isoformat(timespec="seconds")
 
     with open(LOG_FILE, "a", encoding="utf-8") as file:

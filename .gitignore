@@ -5,6 +5,7 @@ __pycache__/
 chat_history.json
 chat_log.jsonl
 todos.json
+logs/
 手动启动前后端.txt
 *.db
 *.db-shm
@@ -19,3 +20,5 @@ venv/
 frontend/node_modules/
 frontend/dist/
 frontend/.npm-cache/
+
+.codex-*.log

@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import socket
+import sys
 from datetime import datetime, timezone
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -112,12 +113,26 @@ class ApiClient:
         return self.request_json("POST", "/chat", payload)
 
 
+class LocalApiClient:
+    def __init__(self, search_callback, chat_callback=None):
+        self.search_callback = search_callback
+        self.chat_callback = chat_callback
+
+    def search(self, query, top_k, min_score):
+        return 200, self.search_callback(query, top_k, min_score)
+
+    def chat(self, message, conversation_id=None):
+        if not self.chat_callback:
+            return 200, {"answer": "", "sources": [], "conversation_id": conversation_id}
+        return 200, self.chat_callback(message, conversation_id)
+
+
 def format_connection_error(method, path, base_url, error):
     return (
         f"{method} {path} failed because the backend is not reachable at {base_url}\n"
         "Start the backend first, for example:\n"
         "  cd backend\n"
-        "  ..\\.venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\n"
+        "  ..\\.venv\\Scripts\\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000\n"
         f"Original error: {error}"
     )
 
@@ -173,8 +188,46 @@ def expected_hit(expected_docs, sources):
     return any(expected_doc in actual_names for expected_doc in expected_docs)
 
 
+def expected_rank(expected_docs, sources):
+    if not expected_docs:
+        return None
+
+    for index, source in enumerate(sources, start=1):
+        if source_doc_name(source.get("document_id", "")) in expected_docs:
+            return index
+    return None
+
+
 def answer_has_citation(answer):
     return "[K" in answer
+
+
+def answer_abstained(answer):
+    normalized = (answer or "").lower()
+    abstention_phrases = (
+        "没有足够",
+        "相关证据",
+        "无法根据知识库",
+        "知识库中没有",
+        "does not contain enough",
+        "not enough evidence",
+        "insufficient evidence",
+        "no supported knowledge evidence",
+    )
+    return any(phrase in normalized for phrase in abstention_phrases)
+
+
+def failure_reasons_for_row(row):
+    reasons = []
+    if row["expected_docs"] and not row["expected_hit"]:
+        reasons.append("expected_source_missed")
+    if row["expected_docs"] and row["answer"] and not row["answer_has_citation"]:
+        reasons.append("missing_citation")
+    if row["unexpected_sources"]:
+        reasons.append("unexpected_source_for_unknown")
+    if not row["expected_docs"] and row["answer"] and not answer_abstained(row["answer"]):
+        reasons.append("unknown_not_abstained")
+    return reasons
 
 
 def upload_docs(client, docs_dir):
@@ -212,32 +265,85 @@ def run_questions(client, questions, top_k, min_score, skip_chat):
         top_source = sources_for_score[0] if sources_for_score else {}
         expected_docs = question.get("expected_docs", [])
         matched_expected = expected_hit(expected_docs, sources_for_score)
+        rank = expected_rank(expected_docs, sources_for_score)
         row = {
             "id": question.get("id", ""),
             "category": question.get("category", ""),
             "question": question_text,
             "expected_docs": ", ".join(expected_docs),
             "expected_hit": matched_expected,
+            "expected_rank": rank or "",
+            "top1_hit": rank == 1,
             "unexpected_sources": not expected_docs and bool(sources_for_score),
             "top_document": top_source.get("document_id", ""),
             "top_score": top_source.get("score", ""),
             "source_count": len(sources_for_score),
             "answer_has_citation": answer_has_citation(answer),
+            "abstained": answer_abstained(answer),
             "conversation_id": conversation_id if conversation_id is not None else "",
             "sources": format_sources(sources_for_score),
             "answer": answer,
         }
+        row["failure_reasons"] = failure_reasons_for_row(row)
+        row["strict_failure"] = bool(row["failure_reasons"])
         rows.append(row)
 
     return rows
 
 
-def write_reports(rows, output_dir):
+def summarize_rows(rows):
+    total = len(rows)
+    answerable_rows = [row for row in rows if row["expected_docs"]]
+    expected_hits = sum(1 for row in answerable_rows if row["expected_hit"])
+    top1_hits = sum(1 for row in answerable_rows if row["top1_hit"])
+    reciprocal_rank_total = sum(
+        1 / int(row["expected_rank"])
+        for row in answerable_rows
+        if row["expected_rank"]
+    )
+    mrr = reciprocal_rank_total / len(answerable_rows) if answerable_rows else 0.0
+    citation_rows = [row for row in rows if row["answer"]]
+    citation_rate = (
+        sum(1 for row in citation_rows if row["answer_has_citation"]) / len(citation_rows)
+        if citation_rows
+        else 0.0
+    )
+    unknown_rows = [row for row in rows if not row["expected_docs"]]
+    unexpected_sources = sum(1 for row in unknown_rows if row["unexpected_sources"])
+    strict_failures = sum(1 for row in rows if row.get("strict_failure"))
+    failure_reasons = {}
+    for row in rows:
+        for reason in row.get("failure_reasons") or []:
+            failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+    abstention_accuracy = (
+        (len(unknown_rows) - unexpected_sources) / len(unknown_rows)
+        if unknown_rows
+        else 0.0
+    )
+    return {
+        "total": total,
+        "answerable_total": len(answerable_rows),
+        "expected_hits": expected_hits,
+        "recall_at_k": expected_hits / len(answerable_rows) if answerable_rows else 0.0,
+        "top1_hits": top1_hits,
+        "top1_hit_rate": top1_hits / len(answerable_rows) if answerable_rows else 0.0,
+        "mrr": mrr,
+        "citation_rate": citation_rate,
+        "abstention_accuracy": abstention_accuracy,
+        "strict_failures": strict_failures,
+        "failure_reasons": failure_reasons,
+        "unknown_total": len(unknown_rows),
+        "unexpected_sources": unexpected_sources,
+    }
+
+
+def write_reports(rows, output_dir, suite_id=None):
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    json_path = output_dir / f"rag_eval_{stamp}.json"
-    csv_path = output_dir / f"rag_eval_{stamp}.csv"
-    md_path = output_dir / f"rag_eval_{stamp}.md"
+    prefix = f"rag_eval_{suite_id}_" if suite_id else "rag_eval_"
+    json_path = output_dir / f"{prefix}{stamp}.json"
+    csv_path = output_dir / f"{prefix}{stamp}.csv"
+    md_path = output_dir / f"{prefix}{stamp}.md"
 
     dump_json(json_path, rows)
 
@@ -247,11 +353,16 @@ def write_reports(rows, output_dir):
         "question",
         "expected_docs",
         "expected_hit",
+        "expected_rank",
+        "top1_hit",
         "unexpected_sources",
         "top_document",
         "top_score",
         "source_count",
         "answer_has_citation",
+        "abstained",
+        "strict_failure",
+        "failure_reasons",
         "conversation_id",
         "sources",
         "answer",
@@ -261,29 +372,56 @@ def write_reports(rows, output_dir):
         writer.writeheader()
         writer.writerows(rows)
 
-    total = len(rows)
-    expected_hits = sum(1 for row in rows if row["expected_hit"])
-    unknown_rows = [row for row in rows if not row["expected_docs"]]
-    unexpected_sources = sum(1 for row in unknown_rows if row["unexpected_sources"])
+    summary = summarize_rows(rows)
     lines = [
         "# RAG Evaluation Report",
         "",
-        f"- Total questions: {total}",
-        f"- Expected source matched: {expected_hits}/{total}",
-        f"- Unknown questions with unexpected sources: {unexpected_sources}/{len(unknown_rows)}",
+        f"- Total questions: {summary['total']}",
+        f"- Recall@K: {summary['expected_hits']}/{summary['answerable_total']}",
+        f"- Top-1 hit rate: {summary['top1_hits']}/{summary['answerable_total']}",
+        f"- MRR: {summary['mrr']:.3f}",
+        f"- Citation rate: {summary['citation_rate']:.3f}",
+        f"- Abstention accuracy: {summary['abstention_accuracy']:.3f}",
+        f"- Strict failures: {summary['strict_failures']}/{summary['total']}",
+        f"- Failure reasons: {json.dumps(summary['failure_reasons'], ensure_ascii=False, sort_keys=True)}",
+        f"- Unknown questions with unexpected sources: {summary['unexpected_sources']}/{summary['unknown_total']}",
         "",
-        "| ID | Category | Expected Hit | Unexpected Sources | Top Document | Top Score | Sources |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| ID | Category | Expected Hit | Rank | Top-1 | Unexpected Sources | Top Document | Top Score | Sources |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {id} | {category} | {expected_hit} | {unexpected_sources} | {top_document} | {top_score} | {sources} |".format(
+            "| {id} | {category} | {expected_hit} | {expected_rank} | {top1_hit} | {unexpected_sources} | {top_document} | {top_score} | {sources} |".format(
                 **{key: str(value).replace("|", "\\|") for key, value in row.items()}
             )
         )
 
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return json_path, csv_path, md_path
+    return json_path, csv_path, md_path, summary
+
+
+def evaluate_quality_gate(summary, args):
+    failures = []
+    checks = [
+        ("recall_at_k", summary["recall_at_k"], args.min_recall),
+        ("top1_hit_rate", summary["top1_hit_rate"], args.min_top1),
+        ("mrr", summary["mrr"], args.min_mrr),
+        ("citation_rate", summary["citation_rate"], args.min_citation_rate),
+        ("abstention_accuracy", summary["abstention_accuracy"], args.min_abstention_accuracy),
+    ]
+    for name, actual, expected in checks:
+        if actual < expected:
+            failures.append(f"{name} {actual:.3f} < {expected:.3f}")
+
+    if summary["strict_failures"] > args.max_strict_failures:
+        failures.append(
+            f"strict_failures {summary['strict_failures']} > {args.max_strict_failures}"
+        )
+    if summary["unexpected_sources"] > args.max_unexpected_sources:
+        failures.append(
+            f"unexpected_sources {summary['unexpected_sources']} > {args.max_unexpected_sources}"
+        )
+    return failures
 
 
 def parse_args():
@@ -298,6 +436,14 @@ def parse_args():
     parser.add_argument("--min-score", type=float, default=0.3)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-chat", action="store_true", help="Only run /knowledge/search, not /chat.")
+    parser.add_argument("--fail-on-threshold", action="store_true", help="Exit with status 1 when quality gates fail.")
+    parser.add_argument("--min-recall", type=float, default=1.0)
+    parser.add_argument("--min-top1", type=float, default=0.8)
+    parser.add_argument("--min-mrr", type=float, default=0.9)
+    parser.add_argument("--min-citation-rate", type=float, default=0.9)
+    parser.add_argument("--min-abstention-accuracy", type=float, default=1.0)
+    parser.add_argument("--max-strict-failures", type=int, default=0)
+    parser.add_argument("--max-unexpected-sources", type=int, default=0)
     return parser.parse_args()
 
 
@@ -318,11 +464,31 @@ def main():
 
     questions = load_json(args.questions)
     rows = run_questions(client, questions, args.top_k, args.min_score, args.skip_chat)
-    json_path, csv_path, md_path = write_reports(rows, args.output_dir)
+    json_path, csv_path, md_path, summary = write_reports(rows, args.output_dir)
     print(f"wrote {json_path}", flush=True)
     print(f"wrote {csv_path}", flush=True)
     print(f"wrote {md_path}", flush=True)
+    print(
+        "summary: "
+        f"recall={summary['recall_at_k']:.3f}, "
+        f"top1={summary['top1_hit_rate']:.3f}, "
+        f"mrr={summary['mrr']:.3f}, "
+        f"citation={summary['citation_rate']:.3f}, "
+        f"abstention={summary['abstention_accuracy']:.3f}, "
+        f"strict_failures={summary['strict_failures']}, "
+        f"unexpected_sources={summary['unexpected_sources']}",
+        flush=True,
+    )
+
+    gate_failures = evaluate_quality_gate(summary, args)
+    if gate_failures:
+        print("quality gate failures:", flush=True)
+        for failure in gate_failures:
+            print(f"- {failure}", flush=True)
+        if args.fail_on_threshold:
+            return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

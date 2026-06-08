@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import app_logging
 import memory
 
 
@@ -27,6 +28,38 @@ class MemoryLogTests(unittest.TestCase):
 
         self.assertEqual([record["message"] for record in records], entries)
         self.assertTrue(all("timestamp" in record for record in records))
+
+    def test_structured_log_event_writes_jsonl(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app_log = Path(temp_dir) / "app.jsonl"
+            error_log = Path(temp_dir) / "errors.jsonl"
+
+            with (
+                patch.object(app_logging, "LOG_DIR", Path(temp_dir)),
+                patch.object(app_logging, "APP_LOG_FILE", app_log),
+                patch.object(app_logging, "ERROR_LOG_FILE", error_log),
+                patch.object(app_logging, "_CONFIGURED", False),
+            ):
+                try:
+                    logger = app_logging.get_logger("test.structured")
+                    app_logging.log_event(
+                        logger,
+                        20,
+                        "test_event",
+                        user_id=1,
+                        api_key="secret",
+                    )
+                finally:
+                    app_logging.reset_logging_for_tests()
+
+            records = [
+                json.loads(line)
+                for line in app_log.read_text(encoding="utf-8").splitlines()
+            ]
+
+        self.assertEqual(records[-1]["event"], "test_event")
+        self.assertEqual(records[-1]["user_id"], 1)
+        self.assertEqual(records[-1]["api_key"], "[REDACTED]")
 
 
 class TrimMessagesTests(unittest.TestCase):

@@ -2,9 +2,27 @@
 
 from datetime import datetime
 
-import vector_store
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, Field
+
+from langchain_retriever import KnowledgeBaseRetriever
 
 MAX_KNOWLEDGE_RESULTS = 5
+
+
+class SearchKnowledgeArgs(BaseModel):
+    query: str = Field(
+        ...,
+        description="The natural-language question or search phrase to find in the knowledge base.",
+    )
+    top_k: int = Field(
+        default=3,
+        description=f"The maximum number of knowledge chunks to return. Cannot exceed {MAX_KNOWLEDGE_RESULTS}.",
+    )
+    min_score: float = Field(
+        default=0.3,
+        description="Minimum score to keep. Defaults to 0.3.",
+    )
 
 
 def get_time():
@@ -28,17 +46,36 @@ def search_knowledge_with_sources(query, top_k=3, min_score=0.3):
     top_k = min(top_k, MAX_KNOWLEDGE_RESULTS)
 
     try:
-        results = vector_store.search(query, top_k=top_k)
+        retriever = KnowledgeBaseRetriever(top_k=top_k)
+        documents = retriever.invoke(query)
     except Exception as error:
         return {
             "text": f"search_knowledge error: {error}",
             "sources": [],
         }
 
-    kept_results = [
-        result for result in results
-        if result.score >= min_score
-    ]
+    kept_results = []
+    for document in documents:
+        metadata = document.metadata or {}
+        score = float(metadata.get("score", 0.0))
+        if score < min_score:
+            continue
+        kept_results.append(
+            {
+                "score": score,
+                "document_id": metadata.get("document_id", ""),
+                "chunk_id": metadata.get("chunk_id", ""),
+                "chunk_index": int(metadata.get("chunk_index", 0)),
+                "page_start": metadata.get("page_start"),
+                "page_end": metadata.get("page_end"),
+                "metadata": {
+                    key: value
+                    for key, value in metadata.items()
+                    if key not in {"score", "chunk_id", "document_id", "chunk_index"}
+                },
+                "text": document.page_content,
+            }
+        )
 
     if not kept_results:
         return {
@@ -64,20 +101,28 @@ def search_knowledge_with_sources(query, top_k=3, min_score=0.3):
     sources = []
     for index, result in enumerate(kept_results, start=1):
         source_label = f"K{index}"
+        page_start = result.get("page_start")
+        page_end = result.get("page_end")
+        page_text = ""
+        if page_start and page_end:
+            page_text = f" page={page_start}" if page_start == page_end else f" pages={page_start}-{page_end}"
         sources.append({
             "label": source_label,
-            "document_id": result.document_id,
-            "chunk_id": getattr(result, "chunk_id", f"{result.document_id}_chunk_{result.chunk_index:04d}"),
-            "chunk_index": result.chunk_index,
-            "score": result.score,
-            "text": result.text,
+            "document_id": result["document_id"],
+            "chunk_id": result["chunk_id"] or f'{result["document_id"]}_chunk_{result["chunk_index"]:04d}',
+            "chunk_index": result["chunk_index"],
+            "score": result["score"],
+            "text": result["text"],
+            "metadata": result.get("metadata") or {},
+            "page_start": page_start,
+            "page_end": page_end,
         })
         lines.extend([
             (
-                f"[{source_label}] document_id={result.document_id} "
-                f"chunk={result.chunk_index} score={result.score:.3f}"
+                f'[{source_label}] document_id={result["document_id"]} '
+                f'chunk={result["chunk_index"]}{page_text} score={result["score"]:.3f}'
             ),
-            result.text,
+            result["text"],
             "",
         ])
 
@@ -87,55 +132,31 @@ def search_knowledge_with_sources(query, top_k=3, min_score=0.3):
     }
 
 
-def call_tool(name, arguments):
-    if name == "get_time":
-        return get_time()
+def get_langchain_tools():
+    return [
+        StructuredTool.from_function(
+            func=get_time,
+            name="get_time",
+            description="Get the current local time.",
+        ),
+        StructuredTool.from_function(
+            func=search_knowledge,
+            name="search_knowledge",
+            description=(
+                "Search the indexed knowledge base with vector search. "
+                "Use this only when the user asks about uploaded notes, project documentation, deployment notes, "
+                "policies, or knowledge base content. Do not use it for ordinary world-knowledge questions or public "
+                "figures unless the user explicitly asks to search the knowledge base. The result contains citation "
+                "labels, source document ids, chunk indexes, scores, and text snippets. Ground the answer in relevant "
+                "snippets and cite labels like [K1] only for directly supported claims."
+            ),
+            args_schema=SearchKnowledgeArgs,
+        ),
+    ]
 
-    if name == "search_knowledge":
-        return search_knowledge(
-            arguments["query"],
-            arguments.get("top_k", 3),
-            arguments.get("min_score", 0.3),
-        )
 
-    return f"unknown tool: {name}"
-
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_time",
-            "description": "Get the current local time.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge",
-            "description": "Search the indexed knowledge base with vector search. Use this only when the user asks about uploaded notes, project documentation, deployment notes, policies, or knowledge base content. Do not use it for ordinary world-knowledge questions or public figures unless the user explicitly asks to search the knowledge base. The result contains citation labels, source document ids, chunk indexes, scores, and text snippets. Ground the answer in relevant snippets and cite labels like [K1] only for directly supported claims.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The natural-language question or search phrase to find in the knowledge base.",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": f"The maximum number of knowledge chunks to return. Defaults to 3 and cannot exceed {MAX_KNOWLEDGE_RESULTS}.",
-                    },
-                    "min_score": {
-                        "type": "number",
-                        "description": "Minimum cosine similarity score to keep. Defaults to 0.3.",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-]
+def get_langchain_tool_map():
+    return {
+        tool.name: tool
+        for tool in get_langchain_tools()
+    }

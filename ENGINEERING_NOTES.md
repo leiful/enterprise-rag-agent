@@ -1,246 +1,221 @@
-# 工程开发笔记
+# Engineering Notes
 
-这个文件是给自己看的工程开发自查清单，用来记录这个项目在开发、测试、构建、配置和部署时要注意的事情。
+This file is a maintenance checklist for the local enterprise RAG project. It
+should describe the current architecture, not historical setup details.
 
-## 项目结构
+## Current Architecture
 
 ```text
-backend/   FastAPI 后端、Python 源码、测试、AI Agent 逻辑
-frontend/  Vue 3 前端、Vite 开发和构建工具
-.env       后端本地密钥配置，不能提交到 Git
+backend/        FastAPI API, agent runtime, RAG chains, indexing, auth, tests
+frontend/       Vue 3 browser UI
+knowledge_files/ Uploaded local knowledge files
+chroma_db/      Local Chroma persistence directory
+rag_eval/       Sample documents, questions, and evaluation reports
+scripts/        RAG evaluation and index maintenance scripts
 ```
 
-后端通常直接运行 Python 源码。前端需要构建成浏览器可运行的文件，输出目录是 `frontend/dist/`。
+The backend uses PostgreSQL for application metadata and Chroma for persistent
+vector storage. PostgreSQL stores users, sessions, conversations, messages,
+knowledge document metadata, vector chunk metadata, BM25 indexes, knowledge
+sources, index jobs, RAG feedback, and access audit records.
 
-## 依赖环境
+## Runtime Configuration
 
-后端依赖安装到 Python 虚拟环境 `.venv`：
+Backend configuration is loaded from the project root `.env`.
+
+Important settings:
+
+```env
+DEEPSEEK_API_KEY=your_model_provider_key
+APP_ENV=development
+EMBEDDING_API_KEY=your_embedding_provider_key
+DATABASE_URL=postgresql://user:password@localhost:5432/ai_agent
+TEST_DATABASE_URL=postgresql://user:password@localhost:5432/ai_agent_test
+VECTOR_STORE_BACKEND=chroma
+CHROMA_PERSIST_DIR=E:\Project\AI Agent\chroma_db
+CHROMA_COLLECTION_NAME=agent_knowledge
+DEFAULT_KNOWLEDGE_SOURCE_PATH=E:\Project\AI Agent\knowledge_files
+APP_USERNAME=admin
+APP_PASSWORD=change_this_local_password
+SESSION_MAX_AGE_SECONDS=604800
+SESSION_COOKIE_SECURE=false
+SESSION_COOKIE_SAMESITE=lax
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+CORS_ALLOW_LOCALHOST_REGEX=true
+```
+
+Frontend configuration lives in `frontend/.env`:
+
+```env
+VITE_API_BASE=http://localhost:8000
+```
+
+Do not put real API keys or passwords in frontend `VITE_` variables. Frontend
+environment variables are bundled into browser-visible code.
+
+## Local Development
+
+Install backend dependencies:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 ```
 
-前端依赖安装到 `frontend/node_modules`：
+Install frontend dependencies:
 
 ```powershell
 cd frontend
 npm.cmd install --cache .npm-cache
 ```
 
-除非有明确原因，不要把项目依赖安装到全局环境里。
-
-## 配置文件
-
-后端配置在项目根目录的 `.env`：
-
-```env
-DEEPSEEK_API_KEY=your_model_provider_key
-APP_USERNAME=admin
-APP_PASSWORD=your_local_login_password
-SESSION_MAX_AGE_SECONDS=604800
-DATABASE_FILE=E:\Project\AI Agent\agent.db
-```
-
-前端配置在 `frontend/.env`：
-
-```env
-VITE_API_BASE=http://localhost:8000
-```
-
-真实密钥不能提交到 Git。`.env` 文件已经被 `.gitignore` 忽略。
-
-不要把登录密码、模型 API Key 放进前端 `VITE_` 变量。前端变量会被打包进浏览器代码里，用户可以看到。
-
-## 数据库
-
-当前使用 SQLite。默认数据库文件是：
-
-```text
-agent.db
-```
-
-后端启动时会自动建表，并根据 `.env` 里的 `APP_USERNAME` 和 `APP_PASSWORD` 创建默认用户。
-
-当前有两张表：
-
-```text
-users      用户名和密码哈希
-sessions   随机 session id、用户 id、过期时间
-```
-
-数据库文件不提交到 Git，`.gitignore` 已忽略：
-
-```text
-*.db
-*.db-shm
-*.db-wal
-```
-
-密码不明文保存，数据库里保存的是 PBKDF2 哈希。后续可以升级成 Argon2。
-
-## 端口
-
-当前本地端口：
-
-```text
-后端: http://localhost:8000
-前端: http://localhost:5173
-```
-
-如果端口被占用，要么停止旧进程，要么有意识地换端口，并同步修改相关配置。
-
-## 本地运行
-
-后端用一个终端运行：
+Run the backend:
 
 ```powershell
 cd "E:\Project\AI Agent\backend"
-..\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+..\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-前端用另一个终端运行：
+Run the frontend:
 
 ```powershell
 cd "E:\Project\AI Agent\frontend"
 npm.cmd run dev
 ```
 
-开发时要保持两个终端都在运行。前端开发服务器会调用后端 API。
+Local ports:
 
-## 测试
+```text
+Backend:  http://localhost:8000
+Frontend: http://localhost:5173
+```
 
-测试用来检查后端行为在修改代码后是否仍然正确。
+## Tests And Build
 
-从项目根目录运行：
+Run backend tests from the project root:
 
 ```powershell
 .\.venv\Scripts\python.exe run_tests.py
 ```
 
-期望结果：
+Database integration tests require `TEST_DATABASE_URL` to point at a dedicated
+test PostgreSQL database. The test runner may truncate application tables in
+that database, so never point it at production data.
 
-```text
-Ran ... tests
-OK
-```
-
-修改后端、接口鉴权、工具逻辑、记忆逻辑、文件操作逻辑后，都应该跑测试。
-
-## 构建
-
-构建用来检查前端能不能被正确编译和打包，并生成部署用文件。
-
-从 `frontend/` 目录运行：
+Build the frontend:
 
 ```powershell
+cd frontend
 npm.cmd run build
 ```
 
-构建产物输出到：
+## RAG Pipeline
+
+The enterprise RAG path currently includes:
+
+- File upload or local source sync.
+- Document parsing for text, Markdown, PDF, DOCX, CSV, and Excel.
+- Chunking with heading-aware splitting and optional semantic chunking.
+- Embedding through an OpenAI-compatible embedding API.
+- Chroma vector persistence.
+- PostgreSQL chunk metadata and BM25 index storage.
+- Hybrid vector plus BM25 retrieval.
+- Optional query rewrite, multi-query expansion, and rerank.
+- Department-aware access filtering.
+- Lifecycle filtering by effective and expiry dates.
+- RAG access auditing and user feedback collection.
+
+The operational status endpoint is:
+
+```text
+GET /admin/rag/status
+```
+
+The latest local evaluation report endpoint is:
+
+```text
+GET /admin/rag/eval
+```
+
+The admin operation audit endpoint is:
+
+```text
+GET /admin/audit
+```
+
+## Knowledge Sources
+
+Registered knowledge sources are stored in PostgreSQL. The default local source
+is created on startup when no source exists. Syncing a source queues indexing
+jobs for changed files, skips unchanged files, and removes index entries for
+files that disappeared from the source folder.
+
+The default local source path is controlled by `DEFAULT_KNOWLEDGE_SOURCE_PATH`
+and falls back to the project `knowledge_files/` directory when the setting is
+omitted.
+
+Current source support is local-folder based. Future enterprise connectors can
+extend this layer for object storage, Confluence, SharePoint, Feishu, or other
+document systems.
+
+## Auth And Security
+
+The browser app logs in through `/login`. The backend stores sessions in
+PostgreSQL and sends the browser an `HttpOnly` session cookie. Protected routes
+require that cookie.
+
+For production deployments:
+
+- Use HTTPS.
+- Set `APP_ENV=production`.
+- Set `SESSION_COOKIE_SECURE=true`.
+- Set `CORS_ALLOW_LOCALHOST_REGEX=false`.
+- Restrict `CORS_ALLOWED_ORIGINS` to the real frontend origin.
+- Use strong admin credentials.
+- Keep `.env`, Chroma data, PostgreSQL data, logs, and uploaded knowledge files
+  out of public static hosting.
+- Treat model API keys and embedding API keys as backend-only secrets.
+
+## Deployment Boundary
+
+Only deploy the frontend build output as static files:
 
 ```text
 frontend/dist/
 ```
 
-正式部署前端时，部署 `frontend/dist/`，不要部署整个 `frontend/` 文件夹，也不要部署项目根目录。
-
-## 登录保护
-
-后端 `/chat` 和 `/files` 这类接口需要登录后才能访问。
-
-登录成功后，后端会生成一个随机 session id，保存到 SQLite，并把这个 session id 通过 `HttpOnly` cookie 发给浏览器。浏览器后续请求会自动带上这个 cookie，后端用它判断用户是否已经登录。
-
-当前 cookie 有效期是 1 周：
-
-```text
-SESSION_MAX_AGE_SECONDS=604800
-```
-
-当前 session 存在 SQLite 里，所以后端重启后 session 仍然可以查到。正式生产系统也常把 session 放到 Redis。
-
-`/health` 保持公开，用来让部署平台或自己检查后端是否运行。
-
-测试未登录访问：
-
-```powershell
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:8000/chat `
-  -ContentType 'application/json' `
-  -Body '{"message":"hello"}'
-```
-
-期望结果：
-
-```text
-Login required.
-```
-
-测试登录并访问接口：
-
-```powershell
-$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:8000/login `
-  -WebSession $session `
-  -ContentType 'application/json' `
-  -Body '{"username":"admin","password":"your_local_login_password"}'
-
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:8000/chat `
-  -WebSession $session `
-  -ContentType 'application/json' `
-  -Body '{"message":"hello"}'
-```
-
-注意：这个版本是学习用的单用户登录。真正公网多人系统还需要 HTTPS、更完整的用户管理、权限模型和 CSRF 防护。
-
-## 部署边界
-
-不要把这些内容作为静态文件暴露出去：
+Do not expose these paths as public static content:
 
 ```text
 .env
-README.md
 backend/
 frontend/src/
 frontend/node_modules/
-frontend/.env
+knowledge_files/
+chroma_db/
+logs/
 ```
 
-前端部署时，只暴露：
+The backend should run as a server process behind a reverse proxy or platform
+service manager.
+
+## Change Checklist
+
+Before editing, identify the affected layer:
 
 ```text
-frontend/dist/
+backend
+frontend
+configuration
+tests
+documentation
+deployment
 ```
 
-后端部署时，用服务器进程运行 FastAPI 应用。不要把 `backend/` 文件夹当作静态目录给别人下载。
+After editing:
 
-## 开发习惯
-
-改代码之前先判断这次改动属于哪一层：
-
-```text
-后端
-前端
-配置
-测试
-文档
-部署
-```
-
-改完代码之后：
-
-```text
-运行相关验证
-查看 git diff
-如果启动方式、配置方式、部署方式变了，同步更新 README 或工程笔记
-```
-
-提交之前：
-
-```powershell
-git status
-git diff
-```
-
-每次提交尽量小而完整。一个好的工程改动，通常会同时考虑代码、测试和文档。
+- Run the narrowest relevant tests.
+- Run the full backend test suite for auth, database, indexing, or RAG changes.
+- Build the frontend when UI code changes.
+- Update README or this file when startup, configuration, schema, or deployment
+  behavior changes.
+- Check `git diff` before committing.

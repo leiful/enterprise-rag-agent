@@ -1,6 +1,7 @@
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
+
+from langchain_core.documents import Document
 
 import tools
 
@@ -11,39 +12,40 @@ class BasicToolTests(unittest.TestCase):
 
         self.assertRegex(result, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 
-    def test_call_tool_routes_get_time(self):
-        with patch("tools.get_time", return_value="now"):
-            result = tools.call_tool("get_time", {})
+    def test_tool_map_exposes_get_time(self):
+        tool = tools.get_langchain_tool_map()["get_time"]
+        result = tool.invoke({})
 
-        self.assertEqual(result, "now")
-
-    def test_call_tool_reports_unknown_tool(self):
-        result = tools.call_tool("missing_tool", {})
-
-        self.assertEqual(result, "unknown tool: missing_tool")
+        self.assertRegex(result, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 
 
 class SearchKnowledgeTests(unittest.TestCase):
     def test_search_knowledge_formats_results(self):
         search_results = [
-            SimpleNamespace(
-                score=0.72,
-                document_id="notes.md",
-                chunk_index=2,
-                text="Install backend dependencies into .venv.",
+            Document(
+                page_content="Install backend dependencies into .venv.",
+                metadata={
+                    "score": 0.72,
+                    "document_id": "notes.md",
+                    "chunk_id": "notes.md_chunk_0002",
+                    "chunk_index": 2,
+                },
             ),
-            SimpleNamespace(
-                score=0.28,
-                document_id="notes.md",
-                chunk_index=3,
-                text="Too weak.",
+            Document(
+                page_content="Too weak.",
+                metadata={
+                    "score": 0.28,
+                    "document_id": "notes.md",
+                    "chunk_id": "notes.md_chunk_0003",
+                    "chunk_index": 3,
+                },
             ),
         ]
 
-        with patch("tools.vector_store.search", return_value=search_results) as search:
+        with patch("tools.KnowledgeBaseRetriever.invoke", return_value=search_results) as search:
             result = tools.search_knowledge("backend dependencies", top_k=9, min_score=0.3)
 
-        search.assert_called_once_with("backend dependencies", top_k=tools.MAX_KNOWLEDGE_RESULTS)
+        search.assert_called_once_with("backend dependencies")
         self.assertIn("Knowledge evidence for 'backend dependencies': 1 result(s).", result)
         self.assertIn("Cite sources with their labels, such as [K1]", result)
         self.assertIn("verify that each snippet is actually about the user's question", result)
@@ -57,7 +59,7 @@ class SearchKnowledgeTests(unittest.TestCase):
         self.assertEqual(result, "search_knowledge error: query is required")
 
     def test_search_knowledge_reports_no_results_above_threshold(self):
-        with patch("tools.vector_store.search", return_value=[]):
+        with patch("tools.KnowledgeBaseRetriever.invoke", return_value=[]):
             result = tools.search_knowledge("missing")
 
         self.assertEqual(
@@ -68,15 +70,18 @@ class SearchKnowledgeTests(unittest.TestCase):
 
     def test_search_knowledge_result_instructs_grounded_answering(self):
         search_results = [
-            SimpleNamespace(
-                score=0.91,
-                document_id="deploy.md",
-                chunk_index=0,
-                text="Deploy frontend/dist instead of the whole frontend directory.",
+            Document(
+                page_content="Deploy frontend/dist instead of the whole frontend directory.",
+                metadata={
+                    "score": 0.91,
+                    "document_id": "deploy.md",
+                    "chunk_id": "deploy.md_chunk_0000",
+                    "chunk_index": 0,
+                },
             ),
         ]
 
-        with patch("tools.vector_store.search", return_value=search_results):
+        with patch("tools.KnowledgeBaseRetriever.invoke", return_value=search_results):
             result = tools.search_knowledge("what should I deploy?")
 
         self.assertIn("Answer only from relevant snippets.", result)
@@ -86,27 +91,28 @@ class SearchKnowledgeTests(unittest.TestCase):
 
     def test_search_knowledge_schema_discourages_public_figure_queries(self):
         schemas_by_name = {
-            tool["function"]["name"]: tool["function"]
-            for tool in tools.TOOLS
+            tool.name: tool
+            for tool in tools.get_langchain_tools()
         }
 
-        description = schemas_by_name["search_knowledge"]["description"]
+        description = schemas_by_name["search_knowledge"].description
 
         self.assertIn("Do not use it for ordinary world-knowledge questions", description)
         self.assertIn("public figures", description)
 
-    def test_call_tool_routes_search_knowledge(self):
-        with patch("tools.search_knowledge", return_value="knowledge result"):
-            result = tools.call_tool("search_knowledge", {"query": "deployment"})
+    def test_tool_map_routes_search_knowledge(self):
+        with patch("tools.KnowledgeBaseRetriever.invoke", return_value=[]):
+            tool = tools.get_langchain_tool_map()["search_knowledge"]
+            result = tool.invoke({"query": "deployment"})
 
-        self.assertEqual(result, "knowledge result")
+        self.assertIn("No supported knowledge evidence was found for 'deployment'", result)
 
 
 class ToolSchemaTests(unittest.TestCase):
     def test_schema_names_match_supported_tools(self):
         schema_names = {
-            tool["function"]["name"]
-            for tool in tools.TOOLS
+            tool.name
+            for tool in tools.get_langchain_tools()
         }
 
         self.assertEqual(
@@ -119,8 +125,8 @@ class ToolSchemaTests(unittest.TestCase):
 
     def test_search_knowledge_schema_requires_query(self):
         schemas_by_name = {
-            tool["function"]["name"]: tool["function"]["parameters"]
-            for tool in tools.TOOLS
+            tool.name: tool.args_schema.model_json_schema()
+            for tool in tools.get_langchain_tools()
         }
 
         self.assertEqual(
