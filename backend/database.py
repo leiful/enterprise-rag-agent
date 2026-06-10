@@ -150,6 +150,7 @@ def init_db():
                 path TEXT,
                 error TEXT,
                 result_json TEXT,
+                acknowledged_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -242,11 +243,39 @@ def init_db():
                 sources_json TEXT,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS model_usage_events (
+                id SERIAL PRIMARY KEY,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                request_id TEXT,
+                usage_scope TEXT NOT NULL DEFAULT 'other',
+                input_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+                output_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+                input_chars INTEGER NOT NULL DEFAULT 0,
+                output_chars INTEGER NOT NULL DEFAULT 0,
+                document_count INTEGER NOT NULL DEFAULT 0,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_model_usage_events_created_at
+            ON model_usage_events(created_at);
+
+            CREATE INDEX IF NOT EXISTS idx_model_usage_events_model_operation
+            ON model_usage_events(model, operation);
+
             """,
         )
         connection.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin'")
         connection.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS departments_json TEXT NOT NULL DEFAULT '[]'")
         connection.execute("ALTER TABLE knowledge_source_files ADD COLUMN IF NOT EXISTS owns_index BOOLEAN NOT NULL DEFAULT TRUE")
+        connection.execute("ALTER TABLE knowledge_index_jobs ADD COLUMN IF NOT EXISTS acknowledged_at TEXT")
+        connection.execute("ALTER TABLE model_usage_events ADD COLUMN IF NOT EXISTS usage_scope TEXT NOT NULL DEFAULT 'other'")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_model_usage_events_usage_scope ON model_usage_events(usage_scope)"
+        )
 
     create_default_user()
 
@@ -903,6 +932,65 @@ def get_index_job_status_counts():
     return {row["status"]: int(row["count"] or 0) for row in rows}
 
 
+def get_unacknowledged_failed_index_job_count():
+    with connect() as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM knowledge_index_jobs
+            WHERE status = 'failed' AND acknowledged_at IS NULL
+            """
+        ).fetchone()
+    return int(row["count"] or 0)
+
+
+def list_failed_index_jobs(limit=20, include_acknowledged=True):
+    filters = ["status = 'failed'"]
+    if not include_acknowledged:
+        filters.append("acknowledged_at IS NULL")
+
+    with connect() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT id, status, document_id, path, error, created_at, updated_at, acknowledged_at
+            FROM knowledge_index_jobs
+            WHERE {' AND '.join(filters)}
+            ORDER BY updated_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def acknowledge_failed_index_jobs(job_ids=None):
+    now = utc_now_iso()
+    with connect() as connection:
+        if job_ids:
+            rows = connection.execute(
+                f"""
+                UPDATE knowledge_index_jobs
+                SET acknowledged_at = %s, updated_at = %s
+                WHERE status = 'failed'
+                  AND acknowledged_at IS NULL
+                  AND id IN ({placeholders(job_ids)})
+                RETURNING id
+                """,
+                [now, now, *job_ids],
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                UPDATE knowledge_index_jobs
+                SET acknowledged_at = %s, updated_at = %s
+                WHERE status = 'failed' AND acknowledged_at IS NULL
+                RETURNING id
+                """,
+                (now, now),
+            ).fetchall()
+    return [row["id"] for row in rows]
+
+
 def get_knowledge_source_file_status_counts():
     with connect() as connection:
         rows = connection.execute(
@@ -1082,6 +1170,239 @@ def get_chunk_token_counts(chunk_ids):
         return {row["id"]: row["token_count"] for row in rows}
 
 
+def ensure_model_usage_schema():
+    with connect() as connection:
+        execute_script(
+            connection,
+            """
+            CREATE TABLE IF NOT EXISTS model_usage_events (
+                id SERIAL PRIMARY KEY,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                request_id TEXT,
+                usage_scope TEXT NOT NULL DEFAULT 'other',
+                input_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+                output_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+                input_chars INTEGER NOT NULL DEFAULT 0,
+                output_chars INTEGER NOT NULL DEFAULT 0,
+                document_count INTEGER NOT NULL DEFAULT 0,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+            """,
+        )
+        connection.execute("ALTER TABLE model_usage_events ADD COLUMN IF NOT EXISTS usage_scope TEXT NOT NULL DEFAULT 'other'")
+        connection.execute("ALTER TABLE model_usage_events ADD COLUMN IF NOT EXISTS metadata_json TEXT NOT NULL DEFAULT '{}'")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_model_usage_events_created_at ON model_usage_events(created_at)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_model_usage_events_model_operation ON model_usage_events(model, operation)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_model_usage_events_usage_scope ON model_usage_events(usage_scope)"
+        )
+
+
+def add_model_usage_event(
+    *,
+    provider,
+    model,
+    operation,
+    request_id=None,
+    input_tokens_estimate=0,
+    output_tokens_estimate=0,
+    input_chars=0,
+    output_chars=0,
+    document_count=0,
+    metadata=None,
+):
+    ensure_model_usage_schema()
+    metadata = metadata or {}
+    usage_scope = normalize_model_usage_scope(metadata.get("scope"), operation)
+    with connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO model_usage_events (
+                provider, model, operation, request_id, usage_scope,
+                input_tokens_estimate, output_tokens_estimate,
+                input_chars, output_chars, document_count,
+                metadata_json, created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                provider,
+                model,
+                operation,
+                request_id,
+                usage_scope,
+                int(input_tokens_estimate or 0),
+                int(output_tokens_estimate or 0),
+                int(input_chars or 0),
+                int(output_chars or 0),
+                int(document_count or 0),
+                json.dumps(metadata, ensure_ascii=False),
+                utc_now_iso(),
+            ),
+        )
+
+
+def normalize_model_usage_scope(scope=None, operation=None):
+    value = str(scope or "").strip()
+    if value and value != "other":
+        return value
+
+    operation_value = str(operation or "").strip()
+    if operation_value in {"chat", "chat_stream"}:
+        return "chat"
+    if operation_value == "rerank":
+        return "knowledge_search"
+    if operation_value == "embedding":
+        return "indexing"
+    return "other"
+
+
+def backfill_model_usage_scopes():
+    ensure_model_usage_schema()
+    with connect() as connection:
+        connection.execute(
+            """
+            UPDATE model_usage_events
+            SET usage_scope = CASE
+                WHEN operation IN ('chat', 'chat_stream') THEN 'chat'
+                WHEN operation = 'rerank' THEN 'knowledge_search'
+                WHEN operation = 'embedding' THEN 'indexing'
+                ELSE usage_scope
+            END
+            WHERE usage_scope = 'other'
+              AND operation IN ('chat', 'chat_stream', 'rerank', 'embedding')
+            """
+        )
+
+
+def summarize_model_usage(days=1, limit=20):
+    try:
+        ensure_model_usage_schema()
+        backfill_model_usage_scopes()
+        trend_bucket = "hour" if int(days) <= 1 else "day"
+        usage_filter = """
+                created_at::timestamptz >= NOW() - (%s || ' days')::interval
+                AND model <> 'test-model'
+                """
+        with connect() as connection:
+            totals = connection.execute(
+                f"""
+                SELECT
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(input_tokens_estimate), 0) AS input_tokens_estimate,
+                    COALESCE(SUM(output_tokens_estimate), 0) AS output_tokens_estimate,
+                    COALESCE(SUM(input_chars), 0) AS input_chars,
+                    COALESCE(SUM(output_chars), 0) AS output_chars,
+                    COALESCE(SUM(document_count), 0) AS document_count
+                FROM model_usage_events
+                WHERE {usage_filter}
+                """,
+                (int(days),),
+            ).fetchone()
+
+            by_model = connection.execute(
+                f"""
+                SELECT
+                    provider, model, operation, usage_scope,
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(input_tokens_estimate), 0) AS input_tokens_estimate,
+                    COALESCE(SUM(output_tokens_estimate), 0) AS output_tokens_estimate,
+                    COALESCE(SUM(input_chars), 0) AS input_chars,
+                    COALESCE(SUM(output_chars), 0) AS output_chars,
+                    COALESCE(SUM(document_count), 0) AS document_count
+                FROM model_usage_events
+                WHERE {usage_filter}
+                GROUP BY provider, model, operation, usage_scope
+                ORDER BY
+                    COALESCE(SUM(input_tokens_estimate), 0) + COALESCE(SUM(output_tokens_estimate), 0) DESC,
+                    COUNT(*) DESC
+                LIMIT %s
+                """,
+                (int(days), int(limit)),
+            ).fetchall()
+
+            by_scope = connection.execute(
+                f"""
+                SELECT
+                    usage_scope,
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(input_tokens_estimate), 0) AS input_tokens_estimate,
+                    COALESCE(SUM(output_tokens_estimate), 0) AS output_tokens_estimate,
+                    COALESCE(SUM(input_chars), 0) AS input_chars,
+                    COALESCE(SUM(output_chars), 0) AS output_chars,
+                    COALESCE(SUM(document_count), 0) AS document_count
+                FROM model_usage_events
+                WHERE {usage_filter}
+                GROUP BY usage_scope
+                ORDER BY
+                    COALESCE(SUM(input_tokens_estimate), 0) + COALESCE(SUM(output_tokens_estimate), 0) DESC,
+                    COUNT(*) DESC
+                """,
+                (int(days),),
+            ).fetchall()
+
+            trend = connection.execute(
+                f"""
+                SELECT
+                    to_char(
+                        date_trunc(%s, created_at::timestamptz AT TIME ZONE 'Asia/Shanghai'),
+                        CASE WHEN %s = 'hour' THEN 'YYYY-MM-DD"T"HH24:00:00' ELSE 'YYYY-MM-DD' END
+                    ) AS bucket,
+                    provider,
+                    model,
+                    operation,
+                    usage_scope,
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(input_tokens_estimate), 0) AS input_tokens_estimate,
+                    COALESCE(SUM(output_tokens_estimate), 0) AS output_tokens_estimate,
+                    COALESCE(SUM(document_count), 0) AS document_count
+                FROM model_usage_events
+                WHERE {usage_filter}
+                GROUP BY bucket, provider, model, operation, usage_scope
+                ORDER BY bucket ASC, model ASC, operation ASC, usage_scope ASC
+                """,
+                (trend_bucket, trend_bucket, int(days)),
+            ).fetchall()
+
+            recent_events = connection.execute(
+                f"""
+                SELECT
+                    id, provider, model, operation, request_id, usage_scope,
+                    input_tokens_estimate, output_tokens_estimate,
+                    input_chars, output_chars, document_count,
+                    metadata_json, created_at
+                FROM model_usage_events
+                WHERE {usage_filter}
+                ORDER BY created_at::timestamptz DESC, id DESC
+                LIMIT %s
+                """,
+                (int(days), int(limit)),
+            ).fetchall()
+    except Exception:
+        totals = {}
+        by_model = []
+        by_scope = []
+        trend = []
+        recent_events = []
+
+    return {
+        "days": int(days),
+        "trend_bucket": "hour" if int(days) <= 1 else "day",
+        "totals": dict(totals or {}),
+        "by_model": [dict(row) for row in by_model],
+        "by_scope": [dict(row) for row in by_scope],
+        "trend": [dict(row) for row in trend],
+        "recent_events": [dict(row) for row in recent_events],
+    }
+
+
 def create_index_job(job_id, document_id=None, path=None, status="queued"):
     now = utc_now_iso()
     with connect() as connection:
@@ -1139,7 +1460,7 @@ def get_index_job(job_id):
     with connect() as connection:
         row = connection.execute(
             """
-            SELECT id, status, document_id, path, error, result_json, created_at, updated_at
+            SELECT id, status, document_id, path, error, result_json, acknowledged_at, created_at, updated_at
             FROM knowledge_index_jobs
             WHERE id = %s
             """,

@@ -1,29 +1,39 @@
-# AI Tool Calling Agent
+# Enterprise RAG Agent
 
-This project is a learning AI Agent with:
+This project is a local enterprise RAG assistant and operations console with:
 
-- Python tool calling logic
 - FastAPI backend
 - Vue 3 frontend
-- unittest coverage
+- Login-protected chat and conversation history
+- PostgreSQL metadata storage
+- Chroma vector search with BM25 hybrid retrieval
+- Knowledge source sync, upload, indexing, deduplication, and audit trails
+- Department-aware knowledge access controls
+- RAG evaluation reports, user feedback, and model usage monitoring
+- unittest coverage for backend behavior
 
 ## Structure
 
 ```text
 backend/
-  AI_agent.py          Agent loop and tool-call execution
-  tools.py             Tool functions and tool schemas
-  memory.py            History and log helpers
-  config.py            Local constants and .env loading
-  main.py              FastAPI app
-  requirements.txt     Backend dependencies
+  main.py              FastAPI app and route wiring
+  AI_agent.py          Agent compatibility facade
+  chains/              Retrieval and answer chains
+  services/            Agent, knowledge, rerank, and tool runtimes
+  database.py          PostgreSQL schema and data access helpers
+  vector_store.py      Chroma/BM25 vector store integration
+  rag_eval_runtime.py  RAG evaluation suite and report helpers
   tests/               Backend tests
 
 frontend/
-  src/                 Vue 3 app
+  src/                 Vue 3 operations console
   package.json         Frontend dependencies and scripts
 
-run_tests.py           Runs backend unit tests
+scripts/               RAG evaluation and maintenance scripts
+rag_eval/              Evaluation questions and generated reports
+knowledge_files/       Local knowledge source files
+chroma_db/             Local Chroma persistence directory
+run_tests.py           Runs backend tests
 .env.example           Local environment template
 frontend/.env.example  Frontend environment template
 ```
@@ -83,6 +93,16 @@ From the project root:
 
 ```bash
 .\.venv\Scripts\python.exe run_tests.py
+```
+
+Common focused runs:
+
+```bash
+.\.venv\Scripts\python.exe run_tests.py --group fast
+.\.venv\Scripts\python.exe run_tests.py --group api
+.\.venv\Scripts\python.exe run_tests.py --group database
+.\.venv\Scripts\python.exe run_tests.py --group vector
+.\.venv\Scripts\python.exe run_tests.py test_rag_status.RagStatusTests
 ```
 
 Database and API integration tests require `TEST_DATABASE_URL` to point at a
@@ -248,6 +268,7 @@ The repository includes a small RAG evaluation pack in `rag_eval/`.
 ```text
 rag_eval/sample_docs/   Markdown documents for upload
 rag_eval/questions.json Evaluation questions and expected source documents
+rag_eval/uploaded_pdf_questions.json Questions for the three uploaded PDF documents
 scripts/rag_eval.py     Uploads docs, asks questions, and writes reports
 ```
 
@@ -267,7 +288,16 @@ Useful options:
 .\.venv\Scripts\python.exe scripts\rag_eval.py --skip-upload
 .\.venv\Scripts\python.exe scripts\rag_eval.py --skip-chat
 .\.venv\Scripts\python.exe scripts\rag_eval.py --top-k 5 --min-score 0.4
+.\.venv\Scripts\python.exe scripts\rag_eval.py --skip-upload --questions rag_eval\uploaded_pdf_questions.json --top-k 10 --min-score 0.1
 ```
+
+Each run writes JSON, CSV, Markdown, RAGAS JSONL, and DeepEval JSON artifacts.
+The RAGAS/DeepEval files are prepared inputs for those frameworks; the default
+script still runs local deterministic checks so the baseline evaluation works
+without extra dependencies.
+
+The admin RAG Evaluation panel also exposes an `Uploaded PDF Baseline` suite for
+the three already-uploaded PDF documents.
 
 Convert a small public RAG benchmark JSONL sample into local eval files:
 

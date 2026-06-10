@@ -1,0 +1,502 @@
+[
+  {
+    "id": "E01",
+    "category": "employee_direct_fact",
+    "question": "According to the City of Beaverton employee handbook, when is a non-exempt employee required to take a meal period?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "At least a 30-minute unpaid meal period is required when the work period is six hours or greater; no meal period is required if the work period is less than six hours.",
+    "expected_terms": [
+      "30-minute unpaid meal period||30分钟无薪用餐||30 分钟无薪用餐",
+      "six hours||6小时||6 小时",
+      "less than six hours||少于6小时||少于 6 小时"
+    ]
+  },
+  {
+    "id": "E02",
+    "category": "employee_direct_fact",
+    "question": "What rest break does the handbook require for non-exempt employees for each four-hour work segment?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "A paid, uninterrupted 15-minute rest break for every four-hour segment or major portion thereof.",
+    "expected_terms": [
+      "15-minute rest break||15分钟休息||15 分钟休息",
+      "four-hour segment||四小时工作段||四小时工作时段||4小时工作时段",
+      "paid||带薪"
+    ]
+  },
+  {
+    "id": "E03",
+    "category": "employee_detail_condition",
+    "question": "Can meal periods and rest breaks be combined or skipped so an employee can arrive late or leave early?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "No. Meal periods and rest breaks may not be taken together or skipped to start late or leave early.",
+    "expected_terms": [
+      "may not be taken together||不能合并||不得合并",
+      "skipped||跳过||不能跳过",
+      "leave early||早退||提前离开"
+    ]
+  },
+  {
+    "id": "E04",
+    "category": "employee_detail_condition",
+    "question": "Under the handbook, can non-exempt employees work overtime without supervisor authorization?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "No. Overtime must be specifically authorized by a supervisor or manager, preferably in writing, except in an emergency.",
+    "expected_terms": [
+      "No overtime||不得加班||不能加班",
+      "authorized||授权||批准",
+      "supervisor||主管||经理"
+    ]
+  },
+  {
+    "id": "E05",
+    "category": "employee_detail_fact",
+    "question": "What is the maximum amount of compensatory time that can be banked?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "Up to 100 hours.",
+    "expected_terms": [
+      "100 hours||100小时||100 小时"
+    ]
+  },
+  {
+    "id": "E06",
+    "category": "employee_detail_condition",
+    "question": "For overtime calculations, do paid hours not actually worked count toward the 40-hour work week?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "Yes. Paid hours not actually worked, such as sick leave, vacation, PTO, holidays, and family leave, count toward the 40-hour work week unless a collective bargaining agreement says otherwise.",
+    "expected_terms": [
+      "paid hours not actually worked||未实际工作的带薪小时||带薪小时",
+      "40-hour||40小时||40 小时",
+      "collective bargaining agreement||集体谈判协议"
+    ]
+  },
+  {
+    "id": "E07",
+    "category": "employee_policy_hierarchy",
+    "question": "If a collective bargaining agreement contradicts the employee handbook, which controls?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "The collective bargaining agreement provision controls.",
+    "expected_terms": [
+      "collective bargaining agreement||集体谈判协议",
+      "controls||优先||控制||为准"
+    ]
+  },
+  {
+    "id": "E08",
+    "category": "employee_remote_work",
+    "question": "Does being approved for a flexible work schedule automatically make an employee eligible for remote work?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "No. Some classifications may not be eligible for remote work even if approved for a flexible work schedule.",
+    "expected_terms": [
+      "not eligible for remote work||不符合远程工作||没有资格远程工作||不会自动使员工有资格远程工作",
+      "flexible work schedule||灵活工作日程||灵活工作时间表||弹性工作安排"
+    ]
+  },
+  {
+    "id": "E09",
+    "category": "employee_lactation_break",
+    "question": "For what child age does the city provide reasonable rest periods for expression of breast milk?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "For an employee's child who is 18 months old or younger.",
+    "expected_terms": [
+      "18 months||18个月||18 个月||十八（18）个月",
+      "younger||以下||或以下"
+    ]
+  },
+  {
+    "id": "E10",
+    "category": "employee_benefits_probation",
+    "question": "Are probationary employees generally entitled to educational assistance?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "Generally no. Probationary employees are generally not entitled to educational assistance.",
+    "expected_terms": [
+      "probationary employees||试用期员工",
+      "not entitled||没有资格||无权||不享有",
+      "educational assistance||教育援助"
+    ]
+  },
+  {
+    "id": "D01",
+    "category": "drug_direct_fact",
+    "question": "What is COSENTYX indicated to treat in plaque psoriasis patients?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Moderate to severe plaque psoriasis in adults and pediatric patients 6 years and older who are candidates for systemic therapy or phototherapy.",
+    "expected_terms": [
+      "moderate to severe plaque psoriasis||中度至重度斑块状银屑病||中重度斑块状银屑病",
+      "6 years||6岁||6 岁",
+      "systemic therapy or phototherapy||系统治疗或光疗||系统性治疗或光疗"
+    ]
+  },
+  {
+    "id": "D02",
+    "category": "drug_direct_fact",
+    "question": "What are the most common adverse reactions listed for COSENTYX?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Nasopharyngitis, diarrhea, and upper respiratory tract infection.",
+    "expected_terms": [
+      "nasopharyngitis||鼻咽炎||感冒症状",
+      "diarrhea||腹泻",
+      "upper respiratory tract infection||上呼吸道感染"
+    ]
+  },
+  {
+    "id": "D03",
+    "category": "drug_safety_warning",
+    "question": "What should be done if a serious infection develops during COSENTYX treatment?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Discontinue COSENTYX until the infection resolves.",
+    "expected_terms": [
+      "discontinue COSENTYX||停用COSENTYX||停止使用COSENTYX||停用 Cosentyx",
+      "infection resolves||感染消退||感染解决"
+    ]
+  },
+  {
+    "id": "D04",
+    "category": "drug_pre_treatment",
+    "question": "What should be evaluated before initiating COSENTYX treatment?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Evaluate patients for tuberculosis and complete age-appropriate vaccinations before initiation.",
+    "expected_terms": [
+      "tuberculosis||结核||TB",
+      "vaccinations||疫苗||接种"
+    ]
+  },
+  {
+    "id": "D05",
+    "category": "drug_immunization",
+    "question": "What does the label say about live vaccines for patients treated with COSENTYX?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Avoid use of live vaccines in patients treated with COSENTYX.",
+    "expected_terms": [
+      "Avoid||避免||不应||不推荐",
+      "live vaccines||活疫苗"
+    ]
+  },
+  {
+    "id": "D06",
+    "category": "drug_contraindication",
+    "question": "What is the listed contraindication for COSENTYX?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Serious hypersensitivity to secukinumab or any excipients in COSENTYX.",
+    "expected_terms": [
+      "Serious hypersensitivity||严重超敏反应||严重过敏反应",
+      "secukinumab||司库奇尤单抗",
+      "excipients||辅料"
+    ]
+  },
+  {
+    "id": "D07",
+    "category": "drug_dosing_detail",
+    "question": "What is the adult plaque psoriasis subcutaneous dosage schedule for COSENTYX?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "300 mg by subcutaneous injection at Weeks 0, 1, 2, 3, and 4, then every 4 weeks thereafter.",
+    "expected_terms": [
+      "300 mg||300mg",
+      "Weeks 0, 1, 2, 3, and 4||第0、1、2、3、4周||第 0、1、2、3、4 周",
+      "every 4 weeks||每4周||每 4 周"
+    ]
+  },
+  {
+    "id": "D08",
+    "category": "drug_pediatric_dosing",
+    "question": "For pediatric plaque psoriasis patients 6 years and older, what dose is recommended below 50 kg and at or above 50 kg?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Below 50 kg: 75 mg. At or above 50 kg: 150 mg.",
+    "expected_terms": [
+      "< 50 kg||低于50 kg||低于50公斤",
+      "75 mg||75mg",
+      "≥ 50 kg||高于50 kg||等于或高于50 kg||50公斤及以上",
+      "150 mg||150mg"
+    ]
+  },
+  {
+    "id": "D09",
+    "category": "drug_route_limitation",
+    "question": "For which adult conditions may COSENTYX intravenous infusion be administered?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "Only adults with PsA, AS, and nr-axSpA.",
+    "expected_terms": [
+      "adults||成人",
+      "PsA||银屑病关节炎",
+      "AS||强直性脊柱炎",
+      "nr-axSpA||非放射学中轴型脊柱关节炎"
+    ]
+  },
+  {
+    "id": "D10",
+    "category": "drug_no_approval",
+    "question": "Is COSENTYX approved for treatment of Crohn's disease?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "No. The label says COSENTYX is not approved for Crohn's disease.",
+    "expected_terms": [
+      "not approved||未批准||没有批准",
+      "Crohn||克罗恩"
+    ]
+  },
+  {
+    "id": "M01",
+    "category": "microwave_electrical",
+    "question": "What electrical supply does the microwave manual require?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "120 volt, 60 Hz, AC only, 15 amp or more protected electrical supply; a separate circuit serving only the microwave is recommended.",
+    "expected_terms": [
+      "120 volt||120伏||120 伏",
+      "60 Hz||60赫兹||60 赫兹",
+      "15 amp||15安培||15 安培",
+      "separate circuit||单独电路"
+    ]
+  },
+  {
+    "id": "M02",
+    "category": "microwave_safety",
+    "question": "Does the microwave manual allow using an extension cord?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "No. It says do not use an extension cord.",
+    "expected_terms": [
+      "DO NOT USE AN EXTENSION CORD||不得使用延长线||不要使用延长线||禁止使用延长线"
+    ]
+  },
+  {
+    "id": "M03",
+    "category": "microwave_grounding",
+    "question": "What does the manual say about the grounding pin?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "Do not cut or remove the grounding pin under any circumstances.",
+    "expected_terms": [
+      "DO NOT||不得||不要",
+      "CUT OR REMOVE||剪断或移除||切断或移除",
+      "GROUNDING PIN||接地插脚||接地引脚||接地针"
+    ]
+  },
+  {
+    "id": "M04",
+    "category": "microwave_turntable",
+    "question": "Can the microwave be used without the turntable and support?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "No. Never use the microwave oven without the turntable and support.",
+    "expected_terms": [
+      "NEVER||绝不要||不得",
+      "without the turntable and support||没有转盘和支架||无转盘支架"
+    ]
+  },
+  {
+    "id": "M05",
+    "category": "microwave_child_lock",
+    "question": "How do you turn the microwave control lock on or off?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "Touch and hold the Stop/Cancel pad for more than 3 seconds.",
+    "expected_terms": [
+      "Stop/Cancel||停止/取消",
+      "more than 3 seconds||超过3秒||3秒以上"
+    ]
+  },
+  {
+    "id": "M06",
+    "category": "microwave_ready_set",
+    "question": "How can you quickly heat for 1, 2, or 3 minutes at 100% power?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "Touch number pad 1, 2, or 3 for the desired minutes of cook time.",
+    "expected_terms": [
+      "1, 2 or 3||1、2或3||1, 2 或 3",
+      "100% power||100%功率||全功率"
+    ]
+  },
+  {
+    "id": "M07",
+    "category": "microwave_service_check",
+    "question": "Before calling service, what water test does the manual suggest?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "Place one cup of water in a glass measuring cup, close the door, and operate for one minute at HIGH 100%; then check light, display, turntable, and whether water is warm.",
+    "expected_terms": [
+      "one cup of water||一杯水",
+      "one minute||一分钟||1分钟",
+      "HIGH 100%||高火100%||100%",
+      "water||水",
+      "warm||变热||温热"
+    ]
+  },
+  {
+    "id": "M08",
+    "category": "microwave_specifications",
+    "question": "What is the microwave output power listed in the specifications?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "900 W.",
+    "expected_terms": [
+      "900 W||900W||900瓦"
+    ]
+  },
+  {
+    "id": "M09",
+    "category": "microwave_popcorn_safety",
+    "question": "Does the manual allow popping popcorn in regular brown bags or glass bowls?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "No. It says not to pop popcorn in regular brown bags or glass bowls.",
+    "expected_terms": [
+      "Pop popcorn||爆米花",
+      "regular brown bags||普通棕色纸袋",
+      "glass bowls||玻璃碗"
+    ]
+  },
+  {
+    "id": "X01",
+    "category": "cross_document_routing",
+    "question": "Which uploaded document should answer a question about live vaccines, and what is the answer?",
+    "expected_docs": [
+      "drug_label_Cosentyx_prescribing_information.pdf"
+    ],
+    "expected_answer": "The COSENTYX drug label. It says to avoid live vaccines in patients treated with COSENTYX.",
+    "expected_terms": [
+      "COSENTYX||Cosentyx",
+      "avoid||避免",
+      "live vaccines||活疫苗"
+    ]
+  },
+  {
+    "id": "X02",
+    "category": "cross_document_routing",
+    "question": "Which uploaded document should answer a question about using an extension cord, and what is the answer?",
+    "expected_docs": [
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "The microwave manual. It says not to use an extension cord.",
+    "expected_terms": [
+      "microwave||微波炉",
+      "extension cord||延长线"
+    ]
+  },
+  {
+    "id": "X03",
+    "category": "cross_document_routing",
+    "question": "Which uploaded document should answer a question about remote work eligibility, and what is the answer?",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf"
+    ],
+    "expected_answer": "The employee handbook. Flexible schedule approval does not automatically mean remote work eligibility.",
+    "expected_terms": [
+      "employee handbook||员工手册",
+      "remote work||远程工作",
+      "flexible work schedule||灵活工作日程||灵活工作时间表||弹性工作安排"
+    ]
+  },
+  {
+    "id": "X04",
+    "category": "cross_document_comparison",
+    "question": "Compare how the employee handbook and microwave manual handle unauthorized actions: unauthorized overtime vs. DIY microwave service.",
+    "expected_docs": [
+      "employee_handbook_City_of_Beaverton_2025.pdf",
+      "microwave_manual_Midea_XM044KYYGE.pdf"
+    ],
+    "expected_answer": "The handbook says unauthorized overtime may lead to discipline. The microwave manual says the oven should never be serviced by a do-it-yourself repair person and should be serviced by qualified personnel.",
+    "expected_terms": [
+      "unauthorized overtime||未经授权加班",
+      "discipline||纪律处分",
+      "do-it-yourself||自行维修||DIY",
+      "qualified||合格服务人员||专业人员"
+    ]
+  },
+  {
+    "id": "N01",
+    "category": "no_answer_refusal",
+    "question": "According to the uploaded documents, what is the recommended COSENTYX dose for treating Crohn's disease?",
+    "expected_docs": [],
+    "expected_answer": "The documents do not provide a recommended COSENTYX dose for Crohn's disease because the label says COSENTYX is not approved for Crohn's disease.",
+    "expected_terms": [
+      "not approved||未批准||没有批准",
+      "Crohn||克罗恩"
+    ],
+    "should_abstain": true
+  },
+  {
+    "id": "N02",
+    "category": "no_answer_refusal",
+    "question": "According to the uploaded documents, what is the City of Beaverton's 2026 remote work policy?",
+    "expected_docs": [],
+    "expected_answer": "The uploaded handbook is effective April 2025 and does not provide a 2026 remote work policy.",
+    "expected_terms": [
+      "does not||没有||未包含||无法",
+      "2026 remote work policy||2026年远程工作政策"
+    ],
+    "should_abstain": true
+  },
+  {
+    "id": "N03",
+    "category": "no_answer_refusal",
+    "question": "According to the uploaded documents, what is the microwave's Wi-Fi pairing procedure?",
+    "expected_docs": [],
+    "expected_answer": "The microwave manual does not contain Wi-Fi pairing instructions.",
+    "expected_terms": [
+      "does not||没有||未包含||无法",
+      "Wi-Fi||wifi||无线网络"
+    ],
+    "should_abstain": true
+  },
+  {
+    "id": "N04",
+    "category": "no_answer_refusal",
+    "question": "Based only on the uploaded documents, what is the exact cost of COSENTYX per dose?",
+    "expected_docs": [],
+    "expected_answer": "The drug label does not provide pricing, so the uploaded documents do not contain enough evidence to answer.",
+    "expected_terms": [
+      "does not provide||没有提供||未包含||无法找到",
+      "pricing||价格||成本||费用"
+    ],
+    "should_abstain": true
+  }
+]

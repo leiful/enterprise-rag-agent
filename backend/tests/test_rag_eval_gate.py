@@ -50,6 +50,40 @@ class RagEvalGateTests(unittest.TestCase):
         self.assertIn("recall_at_k 0.000 < 1.000", failures)
         self.assertIn("unexpected_sources 1 > 0", failures)
 
+    def test_summary_includes_evidence_hit_rate(self):
+        rows = [
+            {
+                "expected_docs": "policy.md",
+                "expected_hit": True,
+                "expected_rank": 1,
+                "top1_hit": True,
+                "unexpected_sources": False,
+                "answer": "",
+                "answer_has_citation": False,
+                "strict_failure": False,
+                "failure_reasons": [],
+                "evidence_terms_hit": True,
+            },
+            {
+                "expected_docs": "policy.md",
+                "expected_hit": True,
+                "expected_rank": 1,
+                "top1_hit": True,
+                "unexpected_sources": False,
+                "answer": "",
+                "answer_has_citation": False,
+                "strict_failure": True,
+                "failure_reasons": ["evidence_terms_missing"],
+                "evidence_terms_hit": False,
+            },
+        ]
+
+        summary = summarize_rows(rows)
+
+        self.assertEqual(summary["evidence_hits"], 1)
+        self.assertEqual(summary["evidence_total"], 2)
+        self.assertEqual(summary["evidence_hit_rate"], 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

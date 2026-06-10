@@ -20,6 +20,7 @@ from config import (
     MULTI_QUERY_COUNT,
     QUERY_COVERAGE_MIN,
     RECALL_K,
+    RERANK_MAX_CANDIDATES,
     RERANK_MIN_CANDIDATES,
 )
 from langchain_retriever import KnowledgeBaseRetriever
@@ -34,6 +35,13 @@ QUERY_STOPWORDS = {
     "is", "it", "its", "me", "not", "of", "on", "or", "should", "that",
     "the", "their", "there", "this", "to", "what", "when", "where", "which",
     "who", "why", "with", "would", "you", "your",
+}
+
+CONTEXT_DEPENDENT_TERMS = {
+    "it", "its", "they", "them", "this", "that", "these", "those", "same",
+    "above", "previous", "earlier", "there", "he", "she", "his", "her",
+    "它", "其", "他们", "她们", "这个", "那个", "这些", "那些", "上述", "上面",
+    "前面", "之前", "刚才", "同样", "继续", "该", "此",
 }
 
 
@@ -88,6 +96,40 @@ def rewrite_query_with_history(client, messages, user_input, *, extract_text_con
         return user_input
 
 
+def conversation_history_messages(messages, knowledge_preflight_prefix):
+    history = []
+    for message in messages or []:
+        role = message.get("role")
+        if role in {"system", "tool"}:
+            continue
+        content = extract_original_question(
+            message.get("content", ""),
+            knowledge_preflight_prefix,
+        ).strip()
+        if content:
+            history.append({"role": role, "content": content})
+    return history
+
+
+def should_rewrite_query(messages, user_input, knowledge_preflight_prefix):
+    history = conversation_history_messages(messages, knowledge_preflight_prefix)
+    if len(history) < 2:
+        return False
+
+    normalized = (user_input or "").strip().lower()
+    if not normalized:
+        return False
+
+    if len(normalized) <= 18:
+        return True
+
+    query_terms = set(re.findall(r"[\u4e00-\u9fff]{1,4}|[a-zA-Z]+", normalized))
+    if query_terms & CONTEXT_DEPENDENT_TERMS:
+        return True
+
+    return bool(re.search(r"\b(what about|how about|and for|same as|continue)\b", normalized))
+
+
 def generate_multiple_queries(client, user_input, num_queries, *, extract_text_content):
     prompt = build_multi_query_prompt(num_queries)
 
@@ -139,7 +181,7 @@ def resolve_retrieval_payload(
     messages = payload.get("messages")
 
     query_to_search = user_input
-    if ENABLE_QUERY_REWRITE and client and messages:
+    if ENABLE_QUERY_REWRITE and client and should_rewrite_query(messages, user_input, knowledge_preflight_prefix):
         query_to_search = rewrite_query_with_history(
             client,
             messages,
@@ -233,6 +275,59 @@ def filter_query_coverage(results, *queries):
     return filtered, filtered_count
 
 
+def query_term_coverage_score(result, *queries):
+    all_terms = []
+    for query in queries:
+        all_terms.extend(significant_query_terms(query or ""))
+    terms = list(dict.fromkeys(all_terms))
+    if not terms:
+        return 0.0
+
+    searchable_text = f"{result.document_id}\n{result.text}".lower()
+    matched = sum(1 for term in terms if term in searchable_text)
+    return matched / len(terms)
+
+
+def select_rerank_candidates(results, max_candidates, *queries):
+    if len(results) <= max_candidates:
+        return results
+
+    selected = []
+    seen_chunks = set()
+    seen_documents = set()
+
+    scored = []
+    for index, result in enumerate(results):
+        coverage = query_term_coverage_score(result, *queries)
+        scored.append({
+            "index": index,
+            "result": result,
+            "coverage": coverage,
+            "score": float(result.score or 0.0),
+        })
+
+    for item in sorted(scored, key=lambda item: (item["coverage"], item["score"]), reverse=True):
+        result = item["result"]
+        if result.chunk_id in seen_chunks or result.document_id in seen_documents:
+            continue
+        selected.append(result)
+        seen_chunks.add(result.chunk_id)
+        seen_documents.add(result.document_id)
+        if len(selected) >= max_candidates:
+            return selected
+
+    for item in sorted(scored, key=lambda item: item["score"], reverse=True):
+        result = item["result"]
+        if result.chunk_id in seen_chunks:
+            continue
+        selected.append(result)
+        seen_chunks.add(result.chunk_id)
+        if len(selected) >= max_candidates:
+            return selected
+
+    return selected
+
+
 def retrieve_ranked_results(payload, *, rerank_with_dashscope):
     retriever = KnowledgeBaseRetriever(
         top_k=payload["recall_k"],
@@ -297,9 +392,16 @@ def retrieve_ranked_results(payload, *, rerank_with_dashscope):
     should_rerank = ENABLE_RERANK and len(all_results) >= max(payload["top_k"] * 3, RERANK_MIN_CANDIDATES)
     if should_rerank:
         access_stats["rerank_applied"] = True
+        rerank_candidates = select_rerank_candidates(
+            all_results,
+            RERANK_MAX_CANDIDATES,
+            payload["user_input"],
+            payload["query_to_search"],
+        )
+        access_stats["rerank_candidate_count"] = len(rerank_candidates)
         kept_results = rerank_with_dashscope(
             payload["query_to_search"],
-            all_results,
+            rerank_candidates,
             top_k=payload["top_k"] * 2,
         )
 
@@ -333,6 +435,7 @@ def retrieve_ranked_results(payload, *, rerank_with_dashscope):
         recall_k=payload["recall_k"],
         min_score=payload["min_score"],
         rerank_enabled=should_rerank,
+        rerank_max_candidates=RERANK_MAX_CANDIDATES if should_rerank else 0,
     )
 
     return {

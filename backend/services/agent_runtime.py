@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from memory import append_log_entries, trim_messages
+from config import MODEL
 from model_client import format_model_error
+from app_logging import request_id_var
+from model_usage import record_model_usage
 
 
 def run_agent(
@@ -38,6 +41,15 @@ def run_agent(
     knowledge_preflight = chain_result["knowledge_preflight"]
     user_message = {"role": "user", "content": knowledge_preflight["content"]}
     assistant_message = {"role": "assistant", "content": chain_result["answer"]}
+    record_model_usage(
+        provider="deepseek",
+        model=MODEL,
+        operation="chat",
+        request_id=request_id_var.get(),
+        input_texts=[message.get("content", "") for message in messages] + [user_input],
+        output_texts=[chain_result["answer"]],
+        document_count=len(knowledge_preflight.get("sources") or []),
+    )
 
     messages.append(user_message)
     messages.append(assistant_message)
@@ -95,6 +107,15 @@ def run_agent_stream(
         yield error_text
 
     final_message = {"role": "assistant", "content": "".join(final_answer)}
+    record_model_usage(
+        provider="deepseek",
+        model=MODEL,
+        operation="chat_stream",
+        request_id=request_id_var.get(),
+        input_texts=[message.get("content", "") for message in messages] + [user_input],
+        output_texts=[final_message["content"]],
+        document_count=len(prepared_payload.get("knowledge_preflight", {}).get("sources") or []),
+    )
     messages.append(final_message)
     new_messages.append(final_message)
     append_log_entries(new_messages)

@@ -12,24 +12,25 @@ from openai import OpenAI
 
 import database
 import langchain_chroma_store
+from app_logging import request_id_var
 from config import (
     CHROMA_COLLECTION_NAME,
     EMBEDDING_API_KEY,
     EMBEDDING_BASE_URL,
     EMBEDDING_MODEL,
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
     ENABLE_SEMANTIC_CHUNKING,
     QUERY_CACHE_MAX_ENTRIES,
     QUERY_CACHE_TTL_SECONDS,
     SEMANTIC_BOUNDARY_STD_FACTOR,
-    SEMANTIC_CHUNK_MIN_TEXT_LENGTH,
     SEMANTIC_CHUNK_MIN_UNITS,
     SEMANTIC_CHUNK_SOFT_RATIO,
     VECTOR_STORE_BACKEND,
 )
+from model_usage import record_model_usage
 
 
-DEFAULT_CHUNK_SIZE = 500
-DEFAULT_CHUNK_OVERLAP = 80
 MAX_EMBEDDING_BATCH_SIZE = 10
 
 # BM25 parameters
@@ -146,6 +147,14 @@ class EmbeddingClient:
             response = self.client.embeddings.create(
                 model=self.model,
                 input=batch,
+            )
+            record_model_usage(
+                provider="dashscope",
+                model=self.model,
+                operation="embedding",
+                request_id=request_id_var.get(),
+                input_texts=batch,
+                document_count=len(batch),
             )
             batch_embeddings = [item.embedding for item in response.data]
             for offset, embedding in enumerate(batch_embeddings):
@@ -352,7 +361,7 @@ def _split_section_body(text, chunk_size, chunk_overlap, embedding_client=None, 
     if (
         enable_semantic_chunking
         and embedding_client is not None
-        and len(text) >= max(chunk_size, SEMANTIC_CHUNK_MIN_TEXT_LENGTH)
+        and len(text) >= chunk_size
     ):
         semantic_chunks = _semantic_split_text(text, chunk_size, chunk_overlap, embedding_client)
         if semantic_chunks:
@@ -1006,8 +1015,8 @@ def hybrid_search(query, top_k=3, bm25_weight=0.5, vector_weight=0.5):
     if cached_results is not None:
         return _clone_results(cached_results)
 
-    bm25_results = bm25_search(query, top_k=20)
-    vector_results = search(query, top_k=20)
+    bm25_results = bm25_search(query, top_k=top_k)
+    vector_results = search(query, top_k=top_k)
 
     combined = {}
 

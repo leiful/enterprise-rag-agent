@@ -13,8 +13,13 @@ warnings.filterwarnings(
 from fastapi.testclient import TestClient
 
 import database
+import app_state
+import dependencies
 import main
 import vector_store
+from routes import chat as chat_routes
+from routes import auth as auth_routes
+from routes import operations as operations_routes
 from tests.test_db_utils import patched_postgres_database
 from tests.test_vector_store import FakeEmbeddingClient
 
@@ -23,12 +28,14 @@ class ApiAuthTests(unittest.TestCase):
     def setUp(self):
         self.username_patch = patch.object(main, "APP_USERNAME", "admin")
         self.password_patch = patch.object(main, "APP_PASSWORD", "password")
+        self.dependencies_username_patch = patch.object(dependencies, "APP_USERNAME", "admin")
+        self.dependencies_password_patch = patch.object(dependencies, "APP_PASSWORD", "password")
         self.db_username_patch = patch.object(database, "APP_USERNAME", "admin")
         self.db_password_patch = patch.object(database, "APP_PASSWORD", "password")
         self.create_client_patch = patch.object(main, "create_client", return_value=object())
         self.rerank_key_patch = patch("services.rerank_service.RERANK_API_KEY", "")
         self.run_agent_patch = patch.object(
-            main,
+            chat_routes,
             "run_agent",
             return_value={
                 "answer": "ok",
@@ -50,6 +57,8 @@ class ApiAuthTests(unittest.TestCase):
         self.database_context.__enter__()
         self.username_patch.start()
         self.password_patch.start()
+        self.dependencies_username_patch.start()
+        self.dependencies_password_patch.start()
         self.db_username_patch.start()
         self.db_password_patch.start()
         self.create_client_patch.start()
@@ -58,16 +67,18 @@ class ApiAuthTests(unittest.TestCase):
 
     def tearDown(self):
         main.login_failures.clear()
-        with main.chat_admission_lock:
-            main.active_chat_total = 0
-            main.active_chat_by_user.clear()
-            main.active_chat_by_conversation.clear()
+        with app_state.chat_admission_lock:
+            app_state.active_chat_total = 0
+            app_state.active_chat_by_user.clear()
+            app_state.active_chat_by_conversation.clear()
         vector_store.clear_runtime_caches()
         self.run_agent_patch.stop()
         self.rerank_key_patch.stop()
         self.create_client_patch.stop()
         self.db_password_patch.stop()
         self.db_username_patch.stop()
+        self.dependencies_password_patch.stop()
+        self.dependencies_username_patch.stop()
         self.password_patch.stop()
         self.username_patch.stop()
         self.database_context.__exit__(None, None, None)
@@ -90,6 +101,46 @@ class ApiAuthTests(unittest.TestCase):
         response = client.get(f"/knowledge/index-jobs/{job_id}")
         self.assertEqual(response.status_code, 200)
         return response
+
+    def test_expected_routes_are_registered(self):
+        registered_paths = {route.path for route in main.app.routes}
+
+        expected_paths = {
+            "/health",
+            "/login",
+            "/logout",
+            "/me",
+            "/admin/rag/status",
+            "/admin/model-usage",
+            "/admin/rag/eval",
+            "/admin/rag/eval/suites",
+            "/admin/rag/eval/run",
+            "/admin/feedback",
+            "/admin/users",
+            "/admin/departments",
+            "/conversations",
+            "/conversations/{conversation_id}/messages",
+            "/feedback",
+            "/chat",
+            "/chat/stream",
+            "/files",
+            "/knowledge/index-file",
+            "/knowledge/upload",
+            "/knowledge/index-jobs/{job_id}",
+            "/knowledge/index-jobs/acknowledge-failed",
+            "/knowledge/documents",
+            "/knowledge/documents/{document_id}",
+            "/knowledge/reindex",
+            "/knowledge/sources",
+            "/knowledge/sources/{source_id}/sync",
+            "/knowledge/sources/missing-files",
+            "/knowledge/documents/deduplicate",
+            "/admin/knowledge-audit",
+            "/admin/audit",
+            "/knowledge/search",
+        }
+
+        self.assertTrue(expected_paths <= registered_paths)
 
     def test_health_does_not_require_login(self):
         with TestClient(main.app) as client:
@@ -162,21 +213,22 @@ class ApiAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_login_rate_limits_repeated_failures(self):
-        with patch.object(main, "LOGIN_MAX_FAILED_ATTEMPTS", 2):
-            with patch.object(main, "LOGIN_LOCKOUT_SECONDS", 60):
-                with TestClient(main.app) as client:
-                    first_response = client.post(
-                        "/login",
-                        json={"username": "admin", "password": "wrong"},
-                    )
-                    second_response = client.post(
-                        "/login",
-                        json={"username": "admin", "password": "wrong"},
-                    )
-                    third_response = client.post(
-                        "/login",
-                        json={"username": "admin", "password": "wrong"},
-                    )
+        with patch.object(dependencies, "LOGIN_MAX_FAILED_ATTEMPTS", 2):
+            with patch.object(dependencies, "LOGIN_LOCKOUT_SECONDS", 60):
+                with patch.object(auth_routes, "LOGIN_LOCKOUT_SECONDS", 60):
+                    with TestClient(main.app) as client:
+                        first_response = client.post(
+                            "/login",
+                            json={"username": "admin", "password": "wrong"},
+                        )
+                        second_response = client.post(
+                            "/login",
+                            json={"username": "admin", "password": "wrong"},
+                        )
+                        third_response = client.post(
+                            "/login",
+                            json={"username": "admin", "password": "wrong"},
+                        )
 
         self.assertEqual(first_response.status_code, 401)
         self.assertEqual(second_response.status_code, 401)
@@ -202,7 +254,7 @@ class ApiAuthTests(unittest.TestCase):
         self.assertTrue(self.session_exists(response.cookies[main.SESSION_COOKIE]))
 
     def test_login_can_set_secure_cookie_for_https_deployments(self):
-        with patch.object(main, "SESSION_COOKIE_SECURE", True):
+        with patch.object(auth_routes, "SESSION_COOKIE_SECURE", True):
             with TestClient(main.app) as client:
                 response = client.post(
                     "/login",
@@ -343,8 +395,8 @@ class ApiAuthTests(unittest.TestCase):
                 }
             ],
         }
-        with patch("main.build_knowledge_preflight", return_value=preflight):
-            with patch("main.run_agent_stream", return_value=iter(["hello ", "there"])):
+        with patch("routes.chat.build_knowledge_preflight", return_value=preflight):
+            with patch("routes.chat.run_agent_stream", return_value=iter(["hello ", "there"])):
                 with TestClient(main.app) as client:
                     login_response = client.post(
                         "/login",
@@ -366,7 +418,7 @@ class ApiAuthTests(unittest.TestCase):
         self.assertEqual(messages[-1]["sources"][0]["document_id"], "stream.md")
 
     def test_chat_rejects_when_user_already_has_running_request(self):
-        with patch.object(main, "CHAT_MAX_CONCURRENT_PER_USER", 1):
+        with patch.object(app_state, "CHAT_MAX_CONCURRENT_PER_USER", 1):
             with TestClient(main.app) as client:
                 client.post("/login", json={"username": "admin", "password": "password"})
                 conversation_id = database.create_conversation(self.default_user_id(), "Busy")
@@ -466,7 +518,7 @@ class ApiAuthTests(unittest.TestCase):
                 )
 
         with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key"}):
-            with patch("main.urlopen", return_value=FakeBalanceResponse()) as urlopen_mock:
+            with patch.object(operations_routes, "urlopen", return_value=FakeBalanceResponse()) as urlopen_mock:
                 with TestClient(main.app) as client:
                     client.post("/login", json={"username": "admin", "password": "password"})
                     response = client.get("/billing/deepseek-balance")
@@ -728,7 +780,7 @@ class ApiAuthTests(unittest.TestCase):
         self.assertFalse(self.session_exists(session_id))
 
     def test_protected_routes_fail_when_login_config_is_missing(self):
-        with patch.object(main, "APP_PASSWORD", ""):
+        with patch.object(dependencies, "APP_PASSWORD", ""):
             with TestClient(main.app) as client:
                 client.cookies.set(main.SESSION_COOKIE, main.create_session(self.default_user_id()))
                 response = client.post(
@@ -739,7 +791,7 @@ class ApiAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
 
     def test_expired_session_is_rejected_and_removed(self):
-        with patch.object(main, "time") as fake_time:
+        with patch.object(dependencies, "time") as fake_time:
             fake_time.time.return_value = 100
             session_id = main.create_session(self.default_user_id())
             fake_time.time.return_value = 100 + main.SESSION_MAX_AGE_SECONDS + 1

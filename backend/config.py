@@ -39,6 +39,7 @@ RERANK_API_URL = os.environ.get(
 ).strip()
 RERANK_MODEL = os.environ.get("RERANK_MODEL", "gte-rerank-v2").strip()
 RERANK_MIN_SCORE = float(os.environ.get("RERANK_MIN_SCORE", "0.20"))
+RERANK_MAX_CANDIDATES = int(os.environ.get("RERANK_MAX_CANDIDATES", "12"))
 
 MAX_HISTORY_MESSAGES = 20
 MAX_FILE_READ_LINES_PER_TURN = 120
@@ -75,11 +76,13 @@ ENABLE_QUERY_COVERAGE_FILTER = (
 QUERY_COVERAGE_MIN = float(os.environ.get("QUERY_COVERAGE_MIN", "0.25"))
 QUERY_CACHE_TTL_SECONDS = int(os.environ.get("QUERY_CACHE_TTL_SECONDS", "300"))
 QUERY_CACHE_MAX_ENTRIES = int(os.environ.get("QUERY_CACHE_MAX_ENTRIES", "128"))
+DEFAULT_CHUNK_SIZE = int(os.environ.get("DEFAULT_CHUNK_SIZE", "700"))
+DEFAULT_CHUNK_OVERLAP = int(os.environ.get("DEFAULT_CHUNK_OVERLAP", "80"))
 ENABLE_SEMANTIC_CHUNKING = os.environ.get("ENABLE_SEMANTIC_CHUNKING", "false").lower() == "true"
 SEMANTIC_CHUNK_MIN_TEXT_LENGTH = int(os.environ.get("SEMANTIC_CHUNK_MIN_TEXT_LENGTH", "800"))
 SEMANTIC_CHUNK_MIN_UNITS = int(os.environ.get("SEMANTIC_CHUNK_MIN_UNITS", "6"))
-SEMANTIC_CHUNK_SOFT_RATIO = float(os.environ.get("SEMANTIC_CHUNK_SOFT_RATIO", "0.7"))
-SEMANTIC_BOUNDARY_STD_FACTOR = float(os.environ.get("SEMANTIC_BOUNDARY_STD_FACTOR", "0.8"))
+SEMANTIC_CHUNK_SOFT_RATIO = float(os.environ.get("SEMANTIC_CHUNK_SOFT_RATIO", "0.75"))
+SEMANTIC_BOUNDARY_STD_FACTOR = float(os.environ.get("SEMANTIC_BOUNDARY_STD_FACTOR", "0.85"))
 VECTOR_STORE_BACKEND = os.environ.get("VECTOR_STORE_BACKEND", "chroma").strip().lower()
 CHROMA_PERSIST_DIR = Path(
     os.environ.get("CHROMA_PERSIST_DIR", str(PROJECT_ROOT / "chroma_db"))
@@ -238,13 +241,29 @@ def validate_runtime_config():
         "QUERY_CACHE_TTL_SECONDS": QUERY_CACHE_TTL_SECONDS,
         "QUERY_CACHE_MAX_ENTRIES": QUERY_CACHE_MAX_ENTRIES,
         "RERANK_MIN_CANDIDATES": RERANK_MIN_CANDIDATES,
+        "RERANK_MAX_CANDIDATES": RERANK_MAX_CANDIDATES,
+        "DEFAULT_CHUNK_SIZE": DEFAULT_CHUNK_SIZE,
     }
     for name, value in numeric_settings.items():
         if value <= 0:
             issues.append(_config_issue(name, "error", f"{name} must be greater than 0."))
 
+    if DEFAULT_CHUNK_OVERLAP < 0:
+        issues.append(_config_issue("DEFAULT_CHUNK_OVERLAP", "error", "DEFAULT_CHUNK_OVERLAP must not be negative."))
+    elif DEFAULT_CHUNK_OVERLAP >= DEFAULT_CHUNK_SIZE:
+        issues.append(_config_issue("DEFAULT_CHUNK_OVERLAP", "error", "DEFAULT_CHUNK_OVERLAP must be smaller than DEFAULT_CHUNK_SIZE."))
+
+    if SEMANTIC_CHUNK_SOFT_RATIO <= 0 or SEMANTIC_CHUNK_SOFT_RATIO > 1:
+        issues.append(_config_issue("SEMANTIC_CHUNK_SOFT_RATIO", "error", "SEMANTIC_CHUNK_SOFT_RATIO must be greater than 0 and no more than 1."))
+
+    if SEMANTIC_BOUNDARY_STD_FACTOR < 0:
+        issues.append(_config_issue("SEMANTIC_BOUNDARY_STD_FACTOR", "error", "SEMANTIC_BOUNDARY_STD_FACTOR must not be negative."))
+
     if RERANK_MIN_SCORE < 0:
         issues.append(_config_issue("RERANK_MIN_SCORE", "error", "RERANK_MIN_SCORE must not be negative."))
+
+    if RERANK_MAX_CANDIDATES <= 0:
+        issues.append(_config_issue("RERANK_MAX_CANDIDATES", "error", "RERANK_MAX_CANDIDATES must be greater than 0."))
 
     if DEFAULT_KNOWLEDGE_MIN_SCORE < 0:
         issues.append(_config_issue("DEFAULT_KNOWLEDGE_MIN_SCORE", "error", "DEFAULT_KNOWLEDGE_MIN_SCORE must not be negative."))

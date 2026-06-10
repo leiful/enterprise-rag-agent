@@ -199,33 +199,119 @@ def expected_rank(expected_docs, sources):
 
 
 def answer_has_citation(answer):
-    return "[K" in answer
+    normalized = str(answer or "")
+    return "[K" in normalized or "【K" in normalized
 
 
 def answer_abstained(answer):
     normalized = (answer or "").lower()
     abstention_phrases = (
-        "没有足够",
-        "相关证据",
-        "无法根据知识库",
-        "知识库中没有",
+        "????",
+        "????",
+        "????",
+        "???",
+        "????",
+        "????",
+        "?????",
+        "???",
+        "???",
+        "???",
+        "??",
+        "??????",
+        "??????",
+        "????????",
+        "does not contain",
         "does not contain enough",
         "not enough evidence",
         "insufficient evidence",
         "no supported knowledge evidence",
+        "cannot answer",
+        "unable to answer",
     )
     return any(phrase in normalized for phrase in abstention_phrases)
+
+
+def normalize_text(value):
+    return " ".join(str(value or "").lower().split())
+
+
+def expected_term_alternatives(term):
+    if isinstance(term, list):
+        return [str(item) for item in term if str(item).strip()]
+    return [item.strip() for item in str(term or "").split("||") if item.strip()]
+
+
+def expected_term_matched(term, normalized_text):
+    return any(
+        normalize_text(alternative) in normalized_text
+        for alternative in expected_term_alternatives(term)
+    )
+
+
+def expected_terms_score(expected_terms, answer):
+    if not expected_terms:
+        return None
+
+    normalized_answer = normalize_text(answer)
+    if not normalized_answer:
+        return 0.0
+
+    hits = sum(1 for term in expected_terms if expected_term_matched(term, normalized_answer))
+    return hits / len(expected_terms)
+
+
+def expected_terms_hit(expected_terms, answer, *, threshold=0.6):
+    score = expected_terms_score(expected_terms, answer)
+    if score is None:
+        return None
+    return score >= threshold
+
+
+def source_text_terms_score(expected_terms, sources):
+    if not expected_terms:
+        return None
+
+    combined_text = normalize_text(" ".join(source.get("text", "") for source in sources))
+    if not combined_text:
+        return 0.0
+
+    hits = sum(1 for term in expected_terms if expected_term_matched(term, combined_text))
+    return hits / len(expected_terms)
+
+
+def source_text_terms_hit(expected_terms, sources, *, threshold=0.6):
+    score = source_text_terms_score(expected_terms, sources)
+    if score is None:
+        return None
+    return score >= threshold
+
+
+def format_contexts(sources):
+    return [
+        {
+            "document_id": source.get("document_id", ""),
+            "chunk_id": source.get("chunk_id", ""),
+            "chunk_index": source.get("chunk_index", ""),
+            "score": source.get("score", ""),
+            "text": source.get("text", ""),
+        }
+        for source in sources
+    ]
 
 
 def failure_reasons_for_row(row):
     reasons = []
     if row["expected_docs"] and not row["expected_hit"]:
         reasons.append("expected_source_missed")
+    if row["expected_docs"] and row.get("evidence_terms_hit") is False:
+        reasons.append("evidence_terms_missing")
     if row["expected_docs"] and row["answer"] and not row["answer_has_citation"]:
         reasons.append("missing_citation")
-    if row["unexpected_sources"]:
+    if row["answer"] and row["expected_terms_hit"] is False and not row.get("should_abstain"):
+        reasons.append("expected_terms_missing")
+    if row["unexpected_sources"] and not row.get("should_abstain"):
         reasons.append("unexpected_source_for_unknown")
-    if not row["expected_docs"] and row["answer"] and not answer_abstained(row["answer"]):
+    if row.get("should_abstain") and row["answer"] and not answer_abstained(row["answer"]):
         reasons.append("unknown_not_abstained")
     return reasons
 
@@ -243,14 +329,16 @@ def upload_docs(client, docs_dir):
     return uploaded
 
 
-def run_questions(client, questions, top_k, min_score, skip_chat):
+def run_questions(client, questions, top_k, min_score, skip_chat, skip_search=False):
     rows = []
     for index, question in enumerate(questions, start=1):
         question_text = question["question"]
         print(f"[{index}/{len(questions)}] {question_text}", flush=True)
 
-        _, search_data = client.search(question_text, top_k=top_k, min_score=min_score)
-        search_sources = search_data.get("results", [])
+        search_sources = []
+        if not skip_search:
+            _, search_data = client.search(question_text, top_k=top_k, min_score=min_score)
+            search_sources = search_data.get("results", [])
 
         answer = ""
         chat_sources = []
@@ -264,17 +352,30 @@ def run_questions(client, questions, top_k, min_score, skip_chat):
         sources_for_score = chat_sources if chat_sources else search_sources
         top_source = sources_for_score[0] if sources_for_score else {}
         expected_docs = question.get("expected_docs", [])
+        expected_terms = question.get("expected_terms", [])
         matched_expected = expected_hit(expected_docs, sources_for_score)
         rank = expected_rank(expected_docs, sources_for_score)
+        expected_terms_matched = expected_terms_hit(expected_terms, answer)
+        term_score = expected_terms_score(expected_terms, answer)
+        evidence_terms_matched = source_text_terms_hit(expected_terms, sources_for_score)
+        evidence_term_score = source_text_terms_score(expected_terms, sources_for_score)
+        should_abstain = bool(question.get("should_abstain"))
         row = {
             "id": question.get("id", ""),
             "category": question.get("category", ""),
             "question": question_text,
             "expected_docs": ", ".join(expected_docs),
+            "expected_answer": question.get("expected_answer", ""),
+            "expected_terms": ", ".join(expected_terms),
+            "expected_terms_hit": expected_terms_matched if expected_terms_matched is not None else "",
+            "expected_terms_score": f"{term_score:.3f}" if term_score is not None else "",
+            "evidence_terms_hit": evidence_terms_matched if evidence_terms_matched is not None else "",
+            "evidence_terms_score": f"{evidence_term_score:.3f}" if evidence_term_score is not None else "",
+            "should_abstain": should_abstain,
             "expected_hit": matched_expected,
             "expected_rank": rank or "",
             "top1_hit": rank == 1,
-            "unexpected_sources": not expected_docs and bool(sources_for_score),
+            "unexpected_sources": not expected_docs and not should_abstain and bool(sources_for_score),
             "top_document": top_source.get("document_id", ""),
             "top_score": top_source.get("score", ""),
             "source_count": len(sources_for_score),
@@ -282,6 +383,7 @@ def run_questions(client, questions, top_k, min_score, skip_chat):
             "abstained": answer_abstained(answer),
             "conversation_id": conversation_id if conversation_id is not None else "",
             "sources": format_sources(sources_for_score),
+            "contexts": format_contexts(sources_for_score),
             "answer": answer,
         }
         row["failure_reasons"] = failure_reasons_for_row(row)
@@ -311,6 +413,11 @@ def summarize_rows(rows):
     unknown_rows = [row for row in rows if not row["expected_docs"]]
     unexpected_sources = sum(1 for row in unknown_rows if row["unexpected_sources"])
     strict_failures = sum(1 for row in rows if row.get("strict_failure"))
+    evidence_rows = [
+        row for row in answerable_rows
+        if row.get("evidence_terms_hit") != ""
+    ]
+    evidence_hits = sum(1 for row in evidence_rows if row.get("evidence_terms_hit") is True)
     failure_reasons = {}
     for row in rows:
         for reason in row.get("failure_reasons") or []:
@@ -331,6 +438,9 @@ def summarize_rows(rows):
         "citation_rate": citation_rate,
         "abstention_accuracy": abstention_accuracy,
         "strict_failures": strict_failures,
+        "evidence_hits": evidence_hits,
+        "evidence_total": len(evidence_rows),
+        "evidence_hit_rate": evidence_hits / len(evidence_rows) if evidence_rows else 0.0,
         "failure_reasons": failure_reasons,
         "unknown_total": len(unknown_rows),
         "unexpected_sources": unexpected_sources,
@@ -339,19 +449,32 @@ def summarize_rows(rows):
 
 def write_reports(rows, output_dir, suite_id=None):
     output_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     prefix = f"rag_eval_{suite_id}_" if suite_id else "rag_eval_"
     json_path = output_dir / f"{prefix}{stamp}.json"
     csv_path = output_dir / f"{prefix}{stamp}.csv"
     md_path = output_dir / f"{prefix}{stamp}.md"
+    ragas_path = output_dir / f"{prefix}{stamp}.ragas.jsonl"
+    deepeval_path = output_dir / f"{prefix}{stamp}.deepeval.json"
 
     dump_json(json_path, rows)
+    with ragas_path.open("w", encoding="utf-8") as output:
+        for item in rows_to_ragas_dataset(rows):
+            output.write(json.dumps(item, ensure_ascii=False) + "\n")
+    dump_json(deepeval_path, rows_to_deepeval_dataset(rows))
 
     fieldnames = [
         "id",
         "category",
         "question",
         "expected_docs",
+        "expected_answer",
+        "expected_terms",
+        "expected_terms_hit",
+        "expected_terms_score",
+        "evidence_terms_hit",
+        "evidence_terms_score",
+        "should_abstain",
         "expected_hit",
         "expected_rank",
         "top1_hit",
@@ -365,6 +488,7 @@ def write_reports(rows, output_dir, suite_id=None):
         "failure_reasons",
         "conversation_id",
         "sources",
+        "contexts",
         "answer",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as output:
@@ -382,6 +506,7 @@ def write_reports(rows, output_dir, suite_id=None):
         f"- MRR: {summary['mrr']:.3f}",
         f"- Citation rate: {summary['citation_rate']:.3f}",
         f"- Abstention accuracy: {summary['abstention_accuracy']:.3f}",
+        f"- Evidence hit rate: {summary['evidence_hit_rate']:.3f}",
         f"- Strict failures: {summary['strict_failures']}/{summary['total']}",
         f"- Failure reasons: {json.dumps(summary['failure_reasons'], ensure_ascii=False, sort_keys=True)}",
         f"- Unknown questions with unexpected sources: {summary['unexpected_sources']}/{summary['unknown_total']}",
@@ -398,6 +523,49 @@ def write_reports(rows, output_dir, suite_id=None):
 
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, csv_path, md_path, summary
+
+
+def rows_to_ragas_dataset(rows):
+    return [
+        {
+            "question": row["question"],
+            "answer": row.get("answer", ""),
+            "contexts": [
+                context.get("text", "")
+                for context in row.get("contexts", [])
+                if context.get("text")
+            ],
+            "ground_truth": row.get("expected_answer", ""),
+            "metadata": {
+                "id": row.get("id", ""),
+                "category": row.get("category", ""),
+                "expected_docs": row.get("expected_docs", ""),
+            },
+        }
+        for row in rows
+    ]
+
+
+def rows_to_deepeval_dataset(rows):
+    return [
+        {
+            "input": row["question"],
+            "actual_output": row.get("answer", ""),
+            "expected_output": row.get("expected_answer", ""),
+            "retrieval_context": [
+                context.get("text", "")
+                for context in row.get("contexts", [])
+                if context.get("text")
+            ],
+            "metadata": {
+                "id": row.get("id", ""),
+                "category": row.get("category", ""),
+                "expected_docs": row.get("expected_docs", ""),
+                "expected_terms": row.get("expected_terms", ""),
+            },
+        }
+        for row in rows
+    ]
 
 
 def evaluate_quality_gate(summary, args):
@@ -436,6 +604,7 @@ def parse_args():
     parser.add_argument("--min-score", type=float, default=0.3)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-chat", action="store_true", help="Only run /knowledge/search, not /chat.")
+    parser.add_argument("--skip-search", action="store_true", help="Only use /chat sources; avoids duplicate retrieval during answer tests.")
     parser.add_argument("--fail-on-threshold", action="store_true", help="Exit with status 1 when quality gates fail.")
     parser.add_argument("--min-recall", type=float, default=1.0)
     parser.add_argument("--min-top1", type=float, default=0.8)
@@ -463,11 +632,13 @@ def main():
         upload_docs(client, args.docs_dir)
 
     questions = load_json(args.questions)
-    rows = run_questions(client, questions, args.top_k, args.min_score, args.skip_chat)
+    rows = run_questions(client, questions, args.top_k, args.min_score, args.skip_chat, skip_search=args.skip_search)
     json_path, csv_path, md_path, summary = write_reports(rows, args.output_dir)
     print(f"wrote {json_path}", flush=True)
     print(f"wrote {csv_path}", flush=True)
     print(f"wrote {md_path}", flush=True)
+    print(f"wrote {json_path.with_suffix('.ragas.jsonl')}", flush=True)
+    print(f"wrote {json_path.with_suffix('.deepeval.json')}", flush=True)
     print(
         "summary: "
         f"recall={summary['recall_at_k']:.3f}, "

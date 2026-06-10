@@ -11,8 +11,10 @@ logs/
 *.db-shm
 *.db-wal
 knowledge_files/
+chroma_db/
 rag_eval/generated/
 rag_eval/reports/
+token-monitor-*.png
 
 .venv/
 venv/

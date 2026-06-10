@@ -6,6 +6,7 @@ from unittest.mock import patch
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, AIMessageChunk
 
+import chains.retrieval_chain as retrieval_chain
 from AI_agent import (
     KNOWLEDGE_PREFLIGHT_PREFIX,
     build_knowledge_preflight,
@@ -18,6 +19,7 @@ from AI_agent import (
     search_knowledge_results,
 )
 from config import NO_EVIDENCE_ANSWER, SYSTEM_MESSAGE
+import vector_store
 from vector_store import SearchResult
 
 
@@ -159,8 +161,7 @@ class RunAgentTests(unittest.TestCase):
         with redirect_stdout(StringIO()):
             with patch("services.agent_runtime.append_log_entries"):
                 answer = run_agent(client, messages, "who is trump?", knowledge_preflight=preflight)
-
-        self.assertEqual(answer, "知识库中没有足够的相关证据支持回答这个问题。")
+        self.assertEqual(answer, NO_EVIDENCE_ANSWER)
         self.assertEqual(len(client.invoked_messages), 0)
         self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, messages[1]["content"])
 
@@ -188,11 +189,11 @@ class RunAgentTests(unittest.TestCase):
         self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, messages[1]["content"])
         prompt_messages = client.stream_messages[0].to_messages()
         self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, prompt_messages[-1].content)
-
     def test_build_knowledge_preflight_uses_rewritten_query_in_lcel_retrieval(self):
         messages = [
             {"role": "system", "content": "test"},
-            {"role": "user", "content": "之前的问题"},
+            {"role": "user", "content": "COSENTYX pediatric use"},
+            {"role": "assistant", "content": "It discusses pediatric indications."},
         ]
         documents = [
             Document(
@@ -207,15 +208,45 @@ class RunAgentTests(unittest.TestCase):
         ]
 
         with patch("chains.retrieval_chain.ENABLE_QUERY_REWRITE", True):
-            with patch("chains.retrieval_chain.rewrite_query_with_history", return_value="改写后的问题"):
+            with patch("chains.retrieval_chain.rewrite_query_with_history", return_value="rewritten pediatric question"):
                 with patch("chains.retrieval_chain.KnowledgeBaseRetriever.invoke", return_value=documents) as invoke_mock:
-                    result = build_knowledge_preflight("原问题", client=object(), messages=messages)
+                    result = build_knowledge_preflight("what about children?", client=object(), messages=messages)
 
-        invoke_mock.assert_called_once_with("改写后的问题")
-        self.assertIn("Knowledge evidence for '改写后的问题'", result["content"])
+        invoke_mock.assert_called_once_with("rewritten pediatric question")
+        self.assertIn("Knowledge evidence for 'rewritten pediatric question'", result["content"])
         self.assertIn("Start the final answer by explicitly saying that the following information comes from the knowledge base materials.", result["content"])
-        self.assertIn("Query was rewritten from: '原问题' to: '改写后的问题'", result["content"])
+        self.assertIn("Query was rewritten from: 'what about children?' to: 'rewritten pediatric question'", result["content"])
         self.assertEqual(result["sources"][0]["document_id"], "deploy.md")
+
+    def test_build_knowledge_preflight_skips_rewrite_for_clear_standalone_query(self):
+        messages = [
+            {"role": "system", "content": "test"},
+            {"role": "user", "content": "Earlier question"},
+            {"role": "assistant", "content": "Earlier answer"},
+        ]
+        documents = [
+            Document(
+                page_content="COSENTYX has prescribing dosage information.",
+                metadata={
+                    "score": 0.91,
+                    "chunk_id": "label.md_chunk_0000",
+                    "document_id": "label.md",
+                    "chunk_index": 0,
+                },
+            ),
+        ]
+
+        with patch("chains.retrieval_chain.ENABLE_QUERY_REWRITE", True):
+            with patch("chains.retrieval_chain.rewrite_query_with_history") as rewrite_mock:
+                with patch("chains.retrieval_chain.KnowledgeBaseRetriever.invoke", return_value=documents) as invoke_mock:
+                    build_knowledge_preflight(
+                        "What is the recommended COSENTYX dosage for plaque psoriasis?",
+                        client=object(),
+                        messages=messages,
+                    )
+
+        rewrite_mock.assert_not_called()
+        invoke_mock.assert_called_once_with("What is the recommended COSENTYX dosage for plaque psoriasis?")
 
     def test_build_knowledge_preflight_includes_enterprise_source_metadata(self):
         documents = [
@@ -368,6 +399,30 @@ class RerankTests(unittest.TestCase):
 
         self.assertEqual([result.document_id for result in results], ["overview.md"])
 
+    def test_hybrid_search_uses_requested_top_k_for_each_channel(self):
+        with patch("vector_store.bm25_search", return_value=[]) as bm25_mock:
+            with patch("vector_store.search", return_value=[]) as vector_mock:
+                vector_store.hybrid_search("policy", top_k=30)
+
+        self.assertEqual(bm25_mock.call_args.kwargs["top_k"], 30)
+        self.assertEqual(vector_mock.call_args.kwargs["top_k"], 30)
+
+    def test_select_rerank_candidates_balances_coverage_score_and_document_diversity(self):
+        candidates = [
+            SearchResult(0.99, "a1", "doc-a", 0, "generic policy overview"),
+            SearchResult(0.98, "a2", "doc-a", 1, "generic policy details"),
+            SearchResult(0.70, "b1", "doc-b", 0, "COSENTYX pediatric dosage restrictions"),
+            SearchResult(0.65, "c1", "doc-c", 0, "COSENTYX pediatric safety"),
+        ]
+
+        selected = retrieval_chain.select_rerank_candidates(
+            candidates,
+            2,
+            "COSENTYX pediatric dosage",
+        )
+
+        self.assertEqual([result.chunk_id for result in selected], ["b1", "c1"])
+
 
 class MainTests(unittest.TestCase):
     def test_main_prints_startup_error_when_api_key_is_missing(self):
@@ -396,3 +451,5 @@ class SystemMessageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

@@ -1,7 +1,65 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import ChatView from "./components/ChatView.vue";
+import ConversationSidebar from "./components/ConversationSidebar.vue";
+import LoginPanel from "./components/LoginPanel.vue";
+import {
+  API_BASE,
+  DAILY_TOKEN_WARNING_THRESHOLD,
+  DEFAULT_RAG_EVAL_SUITES,
+  PAGE_SIZE,
+} from "./appConfig";
+import {
+  auditCandidateCount,
+  auditChunkLabel,
+  auditFilteredCount,
+  auditInactiveFilteredCount,
+  auditKeptCount,
+  auditOlderVersionFilteredCount,
+  auditSourceGroups,
+  decodeSourcesHeader,
+  evalRowStatus,
+  evalRowStatusLabel,
+  evalRowTitle,
+  failureReasonEntries,
+  feedbackTypeLabel,
+  formatAuditScope,
+  formatDepartments,
+  formatFailureReason,
+  formatFileSize,
+  formatLifecycle,
+  formatNumber,
+  formatOperationLabel,
+  formatPageRange,
+  formatPercent,
+  formatRagFeature,
+  formatScore,
+  formatScopeLabel,
+  formatSourceName,
+  formatStatusCount,
+  formatStructureLocation,
+  formatUsageBucket,
+  formatUsageDay,
+  formatUsageEventDetail,
+  hasSources,
+  isRetrievalOnlyReport,
+  itemMetadata,
+  lifecycleClass,
+  normalizeMessages,
+} from "./formatters";
+import { paginateItems, totalPages } from "./pagination";
+import { useModelUsage } from "./useModelUsage";
+import {
+  cloneMessages,
+  emptyMessages,
+  feedbackOptions,
+  formatDate,
+  formatDeepseekBalance as formatDeepseekBalanceValue,
+  ragStatusClass as buildRagStatusClass,
+  resolveUserRole,
+  responseError,
+} from "./uiHelpers";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 const input = ref("");
 const username = ref("");
 const password = ref("");
@@ -17,7 +75,7 @@ const knowledgeLoading = ref(false);
 const error = ref("");
 const knowledgeError = ref("");
 const knowledgeFileInput = ref(null);
-const messagesContainer = ref(null);
+const chatView = ref(null);
 const settingsMenu = ref(null);
 const selectedKnowledgeFile = ref(null);
 const knowledgeNotes = ref("");
@@ -32,6 +90,8 @@ const knowledgeIndexJob = ref(null);
 const ragStatus = ref(null);
 const ragStatusLoading = ref(false);
 const ragStatusError = ref("");
+const failedIndexJobsExpanded = ref(false);
+const acknowledgingFailedJobs = ref(false);
 const users = ref([]);
 const usersLoading = ref(false);
 const usersError = ref("");
@@ -50,14 +110,12 @@ const auditError = ref("");
 const ragEval = ref(null);
 const ragEvalLoading = ref(false);
 const ragEvalError = ref("");
-const defaultRagEvalSuites = [
-  { id: "core", name: "Core Regression", question_count: 20 },
-  { id: "acceptance", name: "Acceptance", question_count: 12 },
-  { id: "ragbench", name: "RAGBench Sample", question_count: 5 },
-];
-const ragEvalSuites = ref([...defaultRagEvalSuites]);
-const selectedRagEvalSuite = ref("core");
+const ragEvalSuites = ref([...DEFAULT_RAG_EVAL_SUITES]);
+const selectedRagEvalSuite = ref("uploaded_pdfs");
 const ragEvalRunning = ref(false);
+const modelUsage = ref(null);
+const modelUsageLoading = ref(false);
+const modelUsageError = ref("");
 const ragFeedback = ref([]);
 const ragFeedbackSummary = ref(null);
 const feedbackLoading = ref(false);
@@ -69,15 +127,12 @@ const knowledgeTab = ref("documents");
 const feedbackPage = ref(1);
 const auditPage = ref(1);
 const missingDocPage = ref(1);
+const usageEventsPage = ref(1);
 const deepseekBalance = ref(null);
 const balanceLoading = ref(false);
 const balanceError = ref("");
-const emptyMessage = {
-  role: "assistant",
-  content: "Ready. Ask me to inspect project files, explain code, or run safe checks.",
-};
 const messages = ref([
-  emptyMessage,
+  ...emptyMessages(),
 ]);
 const conversationMessagesCache = new Map();
 let conversationLoadToken = 0;
@@ -89,13 +144,44 @@ const hasEnabledKnowledgeSources = computed(() => knowledgeSources.value.some((s
 const missingDocFeedback = computed(() =>
   ragFeedback.value.filter((item) => item.feedback_type === "missing_doc"),
 );
-const pageSize = 8;
-const pagedRagFeedback = computed(() => paginateItems(ragFeedback.value, feedbackPage.value));
-const pagedKnowledgeAudits = computed(() => paginateItems(knowledgeAudits.value, auditPage.value));
-const pagedMissingDocFeedback = computed(() => paginateItems(missingDocFeedback.value, missingDocPage.value));
-const feedbackTotalPages = computed(() => totalPages(ragFeedback.value.length));
-const auditTotalPages = computed(() => totalPages(knowledgeAudits.value.length));
-const missingDocTotalPages = computed(() => totalPages(missingDocFeedback.value.length));
+const pageSize = PAGE_SIZE;
+const pagedRagFeedback = computed(() => paginateItems(ragFeedback.value, feedbackPage.value, pageSize));
+const pagedKnowledgeAudits = computed(() => paginateItems(knowledgeAudits.value, auditPage.value, pageSize));
+const pagedMissingDocFeedback = computed(() => paginateItems(missingDocFeedback.value, missingDocPage.value, pageSize));
+const feedbackTotalPages = computed(() => totalPages(ragFeedback.value.length, pageSize));
+const auditTotalPages = computed(() => totalPages(knowledgeAudits.value.length, pageSize));
+const missingDocTotalPages = computed(() => totalPages(missingDocFeedback.value.length, pageSize));
+const dailyTokenWarningThreshold = DAILY_TOKEN_WARNING_THRESHOLD;
+const {
+  modelUsagePeriod,
+  usageTrendTab,
+  usageTrendTooltip,
+  modelUsageRows,
+  modelUsageTotals,
+  modelUsageScopeRows,
+  modelUsageTotalTokens,
+  todayTokenTotal,
+  shouldShowDailyTokenWarning,
+  usageTrendCurrentHourIndex,
+  modelUsageTrendRows,
+  modelUsageTrendAxisTicks,
+  modelUsageTrendAxisTickStyle,
+  modelUsageTrendSeries,
+  modelUsageTrendBarSegments,
+  showUsageTrendTooltip,
+  hideUsageTrendTooltip,
+  modelUsageRecentEvents,
+  formatUsageTrendBucket,
+  formatUsageTrendAxisBucket,
+  setModelUsagePeriod: setModelUsagePeriodValue,
+} = useModelUsage({
+  modelUsage,
+  ragStatus,
+  isAdmin,
+  dailyTokenWarningThreshold,
+});
+const usageEventsTotalPages = computed(() => totalPages(modelUsageRecentEvents(modelUsagePeriod.value).length, pageSize));
+const pagedModelUsageEvents = computed(() => paginateItems(modelUsageRecentEvents(modelUsagePeriod.value), usageEventsPage.value, pageSize));
 const chatAdmissionLabel = computed(() => {
   const admission = ragStatus.value?.chat_admission;
   if (!admission) {
@@ -103,13 +189,9 @@ const chatAdmissionLabel = computed(() => {
   }
   return `${admission.active || 0}/${admission.max_concurrent || 20}`;
 });
-
-function resolveUserRole(data) {
-  if (data.role) {
-    return data.role;
-  }
-  return data.username === "admin" ? "admin" : "";
-}
+const selectedRagEvalSuiteInfo = computed(() =>
+  ragEvalSuites.value.find((suite) => suite.id === selectedRagEvalSuite.value),
+);
 
 function closeSettingsMenu() {
   if (settingsMenu.value) {
@@ -145,15 +227,6 @@ function startRagStatusRefresh() {
   }, 5000);
 }
 
-async function responseError(response, fallback) {
-  try {
-    const data = await response.json();
-    return data.detail || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 async function checkSession() {
   authLoading.value = true;
   error.value = "";
@@ -177,6 +250,7 @@ async function checkSession() {
         await loadKnowledgeAudits();
         await loadRagEvalSuites();
         await loadRagEval();
+        await loadModelUsage();
         await loadRagFeedback();
         await loadDeepseekBalance();
         startRagStatusRefresh();
@@ -233,6 +307,7 @@ async function login() {
       await loadKnowledgeAudits();
       await loadRagEvalSuites();
       await loadRagEval();
+      await loadModelUsage();
       await loadRagFeedback();
       await loadDeepseekBalance();
       startRagStatusRefresh();
@@ -268,6 +343,8 @@ async function logout() {
     knowledgeSources.value = [];
     ragStatus.value = null;
     ragStatusError.value = "";
+    modelUsage.value = null;
+    modelUsageError.value = "";
     departments.value = [];
     departmentsError.value = "";
     newDepartmentName.value = "";
@@ -282,7 +359,7 @@ async function logout() {
     feedbackError.value = "";
     deepseekBalance.value = null;
     balanceError.value = "";
-    messages.value = [emptyMessage];
+    messages.value = emptyMessages();
     conversationMessagesCache.clear();
     localStorage.removeItem("currentConversationId");
     password.value = "";
@@ -359,6 +436,30 @@ async function loadRagStatus(options = {}) {
     if (!silent) {
       ragStatusLoading.value = false;
     }
+  }
+}
+
+async function acknowledgeFailedIndexJobs(jobIds = null) {
+  acknowledgingFailedJobs.value = true;
+  ragStatusError.value = "";
+
+  try {
+    const response = await fetch(`${API_BASE}/knowledge/index-jobs/acknowledge-failed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ job_ids: jobIds }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await responseError(response, `Failed to acknowledge index jobs with status ${response.status}`));
+    }
+
+    await loadRagStatus({ silent: true });
+  } catch (err) {
+    ragStatusError.value = err.message || "Failed to acknowledge index jobs";
+  } finally {
+    acknowledgingFailedJobs.value = false;
   }
 }
 
@@ -445,7 +546,7 @@ async function loadKnowledgeAudits() {
 
     const data = await response.json();
     knowledgeAudits.value = data.audits || [];
-    auditPage.value = Math.min(auditPage.value, totalPages(knowledgeAudits.value.length));
+    auditPage.value = Math.min(auditPage.value, totalPages(knowledgeAudits.value.length, pageSize));
   } catch (err) {
     auditError.value = err.message || "Failed to load audit";
   } finally {
@@ -460,7 +561,7 @@ async function loadRagEval() {
   }
 
   if (ragEvalSuites.value.length === 0) {
-    ragEvalSuites.value = [...defaultRagEvalSuites];
+    ragEvalSuites.value = [...DEFAULT_RAG_EVAL_SUITES];
   }
   ragEvalLoading.value = true;
   ragEvalError.value = "";
@@ -500,10 +601,36 @@ async function loadRagEvalSuites() {
     const data = await response.json();
     ragEvalSuites.value = data.suites || [];
     if (!ragEvalSuites.value.some((suite) => suite.id === selectedRagEvalSuite.value)) {
-      selectedRagEvalSuite.value = ragEvalSuites.value[0]?.id || "core";
+      selectedRagEvalSuite.value = ragEvalSuites.value[0]?.id || "uploaded_pdfs";
     }
   } catch (err) {
-    ragEvalSuites.value = [...defaultRagEvalSuites];
+    ragEvalSuites.value = [...DEFAULT_RAG_EVAL_SUITES];
+  }
+}
+
+async function loadModelUsage() {
+  if (!isAdmin.value) {
+    modelUsage.value = null;
+    return;
+  }
+
+  modelUsageLoading.value = true;
+  modelUsageError.value = "";
+
+  try {
+    const response = await fetch(`${API_BASE}/admin/model-usage`, {
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error(await responseError(response, `Failed to load token usage with status ${response.status}`));
+    }
+
+    modelUsage.value = await response.json();
+  } catch (err) {
+    modelUsageError.value = err.message || "Failed to load token usage";
+  } finally {
+    modelUsageLoading.value = false;
   }
 }
 
@@ -523,7 +650,8 @@ async function runRagEval() {
       body: JSON.stringify({
         suite: selectedRagEvalSuite.value,
         skip_chat: false,
-        skip_upload: false,
+        skip_upload: selectedRagEvalSuite.value === "uploaded_pdfs",
+        skip_search: true,
       }),
     });
 
@@ -533,6 +661,7 @@ async function runRagEval() {
 
     await response.json();
     await loadRagEval();
+    await loadModelUsage();
   } catch (err) {
     ragEvalError.value = err.message || "Failed to run RAG evaluation";
   } finally {
@@ -562,8 +691,8 @@ async function loadRagFeedback() {
     const data = await response.json();
     ragFeedbackSummary.value = data.summary || null;
     ragFeedback.value = data.feedback || [];
-    feedbackPage.value = Math.min(feedbackPage.value, totalPages(ragFeedback.value.length));
-    missingDocPage.value = Math.min(missingDocPage.value, totalPages(missingDocFeedback.value.length));
+    feedbackPage.value = Math.min(feedbackPage.value, totalPages(ragFeedback.value.length, pageSize));
+    missingDocPage.value = Math.min(missingDocPage.value, totalPages(missingDocFeedback.value.length, pageSize));
   } catch (err) {
     feedbackError.value = err.message || "Failed to load feedback";
   } finally {
@@ -598,64 +727,11 @@ async function loadDeepseekBalance() {
 }
 
 function formatDeepseekBalance() {
-  const balances = deepseekBalance.value?.balance_infos || [];
-  if (balances.length === 0) {
-    return balanceLoading.value ? "Balance..." : "Balance unavailable";
-  }
-
-  return balances
-    .map((balance) => `${balance.currency === "CNY" ? "DS" : balance.currency} ${balance.total_balance}`)
-    .join(" / ");
+  return formatDeepseekBalanceValue(deepseekBalance.value, balanceLoading.value);
 }
 
 function ragStatusClass() {
-  const status = ragStatus.value?.status || "unknown";
-  return {
-    ok: status === "ok",
-    degraded: status === "degraded",
-    error: status === "error",
-  };
-}
-
-function formatStatusCount(counts, key) {
-  return Number(counts?.[key] || 0);
-}
-
-function formatRagFeature(value) {
-  return value ? "on" : "off";
-}
-
-function formatPercent(value) {
-  return `${(Number(value || 0) * 100).toFixed(0)}%`;
-}
-
-function feedbackTypeLabel(type) {
-  const labels = {
-    useful: "Useful",
-    not_useful: "Not useful",
-    wrong_source: "Wrong source",
-    outdated: "Outdated",
-    missing_doc: "Missing doc",
-  };
-  return labels[type] || type;
-}
-
-function feedbackOptions(message) {
-  if (message.feedbackSent) {
-    return [];
-  }
-  return message.sources?.length
-    ? ["useful", "not_useful", "wrong_source", "outdated", "missing_doc"]
-    : ["useful", "not_useful", "missing_doc"];
-}
-
-function totalPages(total) {
-  return Math.max(1, Math.ceil(Number(total || 0) / pageSize));
-}
-
-function paginateItems(items, page) {
-  const start = (Math.max(1, page) - 1) * pageSize;
-  return items.slice(start, start + pageSize);
+  return buildRagStatusClass(ragStatus.value?.status || "unknown");
 }
 
 function setOperationsTab(tab) {
@@ -686,8 +762,23 @@ function setMissingDocPage(page) {
   missingDocPage.value = Math.max(1, Math.min(page, missingDocTotalPages.value));
 }
 
+function setUsageEventsPage(page) {
+  usageEventsPage.value = Math.max(1, Math.min(page, usageEventsTotalPages.value));
+}
+
+function setModelUsagePeriod(period) {
+  modelUsagePeriod.value = period;
+  usageEventsPage.value = 1;
+}
+
 function openOperationsOverview() {
   operationsView.value = "overview";
+}
+
+function openTokenMonitor() {
+  activeView.value = "token-monitor";
+  closeSettingsMenu();
+  loadModelUsage();
 }
 
 function openMissingDocManagement() {
@@ -1275,229 +1366,12 @@ async function submitFeedback(message, index, feedbackType) {
   }
 }
 
-function formatDepartments(departments) {
-  const values = Array.isArray(departments) ? departments.filter(Boolean) : [];
-  return values.length ? values.join(", ") : "No departments";
-}
-
-function formatAuditScope(audit) {
-  const scope = audit?.scope || {};
-  if (scope.is_admin || scope.role === "admin") {
-    return "Scope: all departments";
-  }
-  return `Scope: ${formatDepartments(scope.departments || [])}`;
-}
-
-function auditStats(audit) {
-  return audit?.access_stats || {};
-}
-
-function auditFilteredCount(audit) {
-  return Number(auditStats(audit).access_filtered_count || 0);
-}
-
-function auditInactiveFilteredCount(audit) {
-  return Number(auditStats(audit).inactive_filtered_count || 0);
-}
-
-function auditOlderVersionFilteredCount(audit) {
-  return Number(auditStats(audit).older_version_filtered_count || 0);
-}
-
-function auditCandidateCount(audit) {
-  return Number(auditStats(audit).candidate_count || 0);
-}
-
-function auditKeptCount(audit) {
-  return Number(auditStats(audit).kept_count || 0);
-}
-
-function auditSourceDepartment(source) {
-  return source?.metadata?.department || source?.department || "Public";
-}
-
-function auditSourceGroups(audit) {
-  const groups = new Map();
-  for (const source of audit?.sources || []) {
-    const documentName = formatSourceName(source.document_id);
-    const department = auditSourceDepartment(source);
-    const key = `${documentName}::${department}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        documentName,
-        department,
-        sources: [],
-      });
-    }
-    groups.get(key).sources.push(source);
-  }
-  return Array.from(groups.values());
-}
-
-function auditChunkLabel(source) {
-  const parts = [];
-  if (source?.chunk_index !== undefined && source?.chunk_index !== null) {
-    parts.push(`chunk ${source.chunk_index}`);
-  }
-  const pageRange = formatPageRange(source);
-  if (pageRange) {
-    parts.push(pageRange);
-  }
-  const structure = formatStructureLocation(source);
-  if (structure) {
-    parts.push(structure);
-  }
-  parts.push(`score ${formatScore(source?.score)}`);
-  return parts.join(" · ");
-}
-
-function formatScore(score) {
-  return Number(score || 0).toFixed(3);
-}
-
-function formatPageRange(item) {
-  const pageStart = Number(item?.page_start || item?.metadata?.page_start || 0);
-  const pageEnd = Number(item?.page_end || item?.metadata?.page_end || pageStart);
-  if (!pageStart) {
-    return "";
-  }
-  if (!pageEnd || pageEnd === pageStart) {
-    return `page ${pageStart}`;
-  }
-  return `pages ${pageStart}-${pageEnd}`;
-}
-
-function itemMetadata(item) {
-  return item?.metadata || {};
-}
-
-function formatStructureLocation(item) {
-  const metadata = itemMetadata(item);
-  if (metadata.section_path) {
-    return metadata.section_path;
-  }
-  if (metadata.section_title) {
-    return metadata.section_title;
-  }
-
-  const sheetName = metadata.sheet_name;
-  const rowStart = metadata.row_start;
-  const rowEnd = metadata.row_end || rowStart;
-  if (sheetName && rowStart) {
-    return rowEnd && rowEnd !== rowStart
-      ? `${sheetName} rows ${rowStart}-${rowEnd}`
-      : `${sheetName} row ${rowStart}`;
-  }
-  if (sheetName) {
-    return sheetName;
-  }
-  return "";
-}
-
-function formatLifecycle(document) {
-  const now = new Date();
-  const effectiveAt = document?.effective_date ? new Date(document.effective_date) : null;
-  const expiryAt = document?.expiry_date ? new Date(document.expiry_date) : null;
-  if (effectiveAt && !Number.isNaN(effectiveAt.getTime()) && effectiveAt > now) {
-    return "not yet effective";
-  }
-  if (expiryAt && !Number.isNaN(expiryAt.getTime()) && expiryAt < now) {
-    return "expired";
-  }
-  return "active";
-}
-
-function lifecycleClass(document) {
-  return {
-    active: formatLifecycle(document) === "active",
-    inactive: formatLifecycle(document) !== "active",
-  };
-}
-
-function formatSourceName(documentId) {
-  const value = String(documentId || "").trim();
-  if (!value) {
-    return "Unknown source";
-  }
-  if (value.includes("__")) {
-    return value.split("__").filter(Boolean).pop() || value;
-  }
-  return value;
-}
-
-function formatFileSize(bytes) {
-  const value = Number(bytes || 0);
-  if (!value) {
-    return "0 B";
-  }
-  if (value < 1024) {
-    return `${value} B`;
-  }
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-  return `${(value / 1024 / 1024).toFixed(2)} MB`;
-}
-
-function decodeSourcesHeader(value) {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
-    const decoded = new TextDecoder().decode(bytes);
-    return JSON.parse(decoded);
-  } catch {
-    return [];
-  }
-}
-
-function hasSources(message) {
-  return Array.isArray(message.sources);
-}
-
-function normalizeMessages(rawMessages) {
-  const normalized = (rawMessages || []).map((message) => ({
-    id: message.id,
-    role: message.role,
-    content: message.content,
-    sources: message.sources,
-    created_at: message.created_at,
-    feedbackSent: message.feedbackSent,
-    feedbackError: message.feedbackError,
-  }));
-
-  return normalized.length > 0 ? normalized : [emptyMessage];
-}
-
-function cloneMessages(rawMessages) {
-  return rawMessages.map((message) => ({
-    id: message.id,
-    role: message.role,
-    content: message.content,
-    sources: Array.isArray(message.sources) ? [...message.sources] : message.sources,
-    created_at: message.created_at,
-    feedbackSent: message.feedbackSent,
-    feedbackError: message.feedbackError,
-  }));
-}
-
 function cacheCurrentConversation() {
   if (!currentConversationId.value) {
     return;
   }
 
   conversationMessagesCache.set(currentConversationId.value, cloneMessages(messages.value));
-}
-
-function formatDate(value) {
-  if (!value) {
-    return "";
-  }
-
-  return new Date(value).toLocaleString();
 }
 
 async function restoreConversation() {
@@ -1513,7 +1387,7 @@ async function restoreConversation() {
 function newConversation() {
   currentConversationId.value = null;
   localStorage.removeItem("currentConversationId");
-  messages.value = [emptyMessage];
+    messages.value = emptyMessages();
 }
 
 function openNewChat() {
@@ -1524,9 +1398,7 @@ function openNewChat() {
 async function scrollMessagesToBottom() {
   await nextTick();
 
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-  }
+  chatView.value?.scrollToBottom();
 }
 
 async function selectConversation(conversationId) {
@@ -1745,6 +1617,13 @@ checkSession();
             {{ chatAdmissionLabel }}
           </span>
           <span
+            v-if="isAuthenticated && shouldShowDailyTokenWarning()"
+            class="token-warning-status"
+            :title="`Today token usage: ${formatNumber(todayTokenTotal())}`"
+          >
+            Token high
+          </span>
+          <span
             v-if="isAuthenticated && isAdmin"
             class="balance-status"
             :class="{ unavailable: balanceError || deepseekBalance?.is_available === false }"
@@ -1775,6 +1654,14 @@ checkSession();
               <button
                 v-if="isAdmin"
                 type="button"
+                :class="{ active: activeView === 'token-monitor' }"
+                @click="openTokenMonitor"
+              >
+                Token Monitor
+              </button>
+              <button
+                v-if="isAdmin"
+                type="button"
                 :class="{ active: activeView === 'operations' }"
                 @click="activeView = 'operations'; openOperationsOverview(); closeSettingsMenu()"
               >
@@ -1793,159 +1680,41 @@ checkSession();
         </div>
       </header>
 
-      <div v-if="!isAuthenticated" class="login-view">
-        <div class="login-copy">
-          <p class="eyebrow">Secure access</p>
-          <h2>Open your agent workspace</h2>
-          <p>Use your server account to continue.</p>
-        </div>
-
-        <form class="login-form" @submit.prevent="login">
-          <label>
-            <span>Username</span>
-            <input v-model="username" autocomplete="username" placeholder="admin" />
-          </label>
-          <label>
-            <span>Password</span>
-            <input
-              v-model="password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="Enter password"
-            />
-          </label>
-          <button type="submit" :disabled="authLoading || !username.trim() || !password">
-            {{ authLoading ? "Signing in" : "Sign in" }}
-          </button>
-        </form>
-      </div>
+      <LoginPanel
+        v-if="!isAuthenticated"
+        v-model:username="username"
+        v-model:password="password"
+        :auth-loading="authLoading"
+        @login="login"
+      />
 
       <div v-else class="workspace">
-        <aside class="sidebar">
-          <button class="new-chat-button" type="button" @click="openNewChat">
-            New chat
-          </button>
-          <div class="conversation-list">
-            <button
-              v-for="conversation in conversations"
-              :key="conversation.id"
-              class="conversation-item"
-              :class="{ active: conversation.id === currentConversationId }"
-              type="button"
-              @click="openConversation(conversation.id)"
-            >
-              <div class="conversation-title">{{ conversation.title }}</div>
-              <div v-if="conversation.updated_at" class="conversation-time">{{ formatDate(conversation.updated_at) }}</div>
-            </button>
-          </div>
-        </aside>
+        <ConversationSidebar
+          :conversations="conversations"
+          :current-conversation-id="currentConversationId"
+          :format-date="formatDate"
+          @new-chat="openNewChat"
+          @open-conversation="openConversation"
+        />
 
-        <div v-if="activeView === 'chat'" class="chat-column">
-          <div ref="messagesContainer" class="messages">
-            <div v-if="conversationLoading" class="message-skeleton-list" aria-hidden="true">
-              <div class="message-skeleton">
-                <span></span>
-                <strong></strong>
-                <em></em>
-              </div>
-              <div class="message-skeleton user">
-                <span></span>
-                <strong></strong>
-              </div>
-              <div class="message-skeleton">
-                <span></span>
-                <strong></strong>
-                <em></em>
-              </div>
-            </div>
-            <article
-              v-if="!conversationLoading"
-              v-for="(message, index) in messages"
-              :key="index"
-              class="message"
-              :class="message.role"
-            >
-              <div class="message-header">
-                <span class="role">{{ message.role }}</span>
-                <span v-if="message.created_at" class="message-time">{{ formatDate(message.created_at) }}</span>
-              </div>
-              <pre>{{ message.content }}</pre>
-              <div
-                v-if="message.role === 'assistant' && message.content && index > 0"
-                class="message-feedback"
-              >
-                <button
-                  v-for="type in feedbackOptions(message)"
-                  :key="type"
-                  class="feedback-button"
-                  type="button"
-                  :disabled="message.feedbackLoading"
-                  @click="submitFeedback(message, index, type)"
-                >
-                  {{ feedbackTypeLabel(type) }}
-                </button>
-                <span v-if="message.feedbackSent" class="feedback-saved">
-                  Saved: {{ feedbackTypeLabel(message.feedbackSent) }}
-                </span>
-                <span v-if="message.feedbackError" class="feedback-error">
-                  {{ message.feedbackError }}
-                </span>
-              </div>
-              <div
-                v-if="message.role === 'assistant' && hasSources(message)"
-                class="message-sources"
-              >
-                <div v-if="message.sources.length" class="source-list">
-                  <details
-                    v-for="source in message.sources"
-                    :key="source.chunk_id || `${source.document_id}-${source.chunk_index}`"
-                    class="source-item"
-                  >
-                    <summary>
-                      <span class="source-label">[{{ source.label }}]</span>
-                      <span class="source-document" :title="source.document_id || ''">
-                        {{ formatSourceName(source.document_id) }}
-                      </span>
-                      <span class="source-meta">
-                        chunk {{ source.chunk_index }} · score {{ formatScore(source.score) }}
-                      </span>
-                      <span class="source-meta-readable">
-                        chunk {{ source.chunk_index }}
-                        <template v-if="formatPageRange(source)"> · {{ formatPageRange(source) }}</template>
-                        · score {{ formatScore(source.score) }}
-                      </span>
-                      <span class="source-meta-clean">
-                        chunk {{ source.chunk_index }}
-                        <template v-if="formatPageRange(source)"> | {{ formatPageRange(source) }}</template>
-                        | score {{ formatScore(source.score) }}
-                      </span>
-                    </summary>
-                    <p>{{ source.text }}</p>
-                  </details>
-                </div>
-                <p v-else-if="message.content" class="source-empty">
-                  本回答未使用知识库来源
-                </p>
-              </div>
-            </article>
-          </div>
-
-          <p v-if="error" class="error">{{ error }}</p>
-
-          <form class="composer" @submit.prevent="sendMessageStream">
-            <textarea
-              v-model="input"
-              rows="3"
-              placeholder="Type a message..."
-              :disabled="conversationLoading"
-              @keydown.enter.exact.prevent="sendMessageStream"
-            />
-            <button type="submit" :disabled="loading || conversationLoading || !input.trim()">
-              {{ loading ? "Sending" : "Send" }}
-            </button>
-          </form>
-        </div>
-
+        <ChatView
+          v-if="activeView === 'chat'"
+          ref="chatView"
+          v-model:input="input"
+          :conversation-loading="conversationLoading"
+          :messages="messages"
+          :error="error"
+          :loading="loading"
+          :feedback-options="feedbackOptions"
+          :feedback-type-label="feedbackTypeLabel"
+          :has-sources="hasSources"
+          :format-date="formatDate"
+          :format-source-name="formatSourceName"
+          :format-score="formatScore"
+          :format-page-range="formatPageRange"
+          @send="sendMessageStream"
+          @submit-feedback="submitFeedback"
+        />
         <div v-else-if="isAdmin && activeView === 'knowledge'" class="knowledge-column">
           <section class="knowledge-section">
             <div class="section-header">
@@ -2001,10 +1770,20 @@ checkSession();
                 <span>{{ ragStatus.sources?.enabled_count || 0 }} active sources</span>
               </div>
               <div class="rag-metric-grid">
-                <div>
-                  <strong>{{ formatStatusCount(ragStatus.index_jobs?.status_counts, "failed") }}</strong>
+                <button
+                  class="metric-button"
+                  type="button"
+                  :disabled="!ragStatus.index_jobs?.recent_failed?.length"
+                  @click="failedIndexJobsExpanded = !failedIndexJobsExpanded"
+                >
+                  <strong>
+                    {{ ragStatus.index_jobs?.failed_unacknowledged_count || 0 }}
+                    <template v-if="formatStatusCount(ragStatus.index_jobs?.status_counts, 'failed')">
+                      / {{ formatStatusCount(ragStatus.index_jobs?.status_counts, "failed") }}
+                    </template>
+                  </strong>
                   <span>failed jobs</span>
-                </div>
+                </button>
                 <div>
                   <strong>{{ formatStatusCount(ragStatus.sources?.file_status_counts, "missing") }}</strong>
                   <span>missing files</span>
@@ -2038,7 +1817,36 @@ checkSession();
                 <span>rewrite {{ formatRagFeature(ragStatus.retrieval?.query_rewrite_enabled) }}</span>
                 <span>multi-query {{ formatRagFeature(ragStatus.retrieval?.multi_query_enabled) }}</span>
                 <span>rerank {{ formatRagFeature(ragStatus.retrieval?.rerank_enabled) }}</span>
-                <span>recall {{ ragStatus.retrieval?.recall_k || 0 }}</span>
+                  <span>recall {{ ragStatus.retrieval?.recall_k || 0 }}</span>
+              </div>
+              <div
+                v-if="failedIndexJobsExpanded && ragStatus.index_jobs?.recent_failed?.length"
+                class="failed-job-panel"
+              >
+                <div class="failed-job-header">
+                  <strong>Failed index jobs</strong>
+                  <button
+                    class="secondary-button"
+                    type="button"
+                    :disabled="acknowledgingFailedJobs || !ragStatus.index_jobs?.failed_unacknowledged_count"
+                    @click="acknowledgeFailedIndexJobs()"
+                  >
+                    Acknowledge
+                  </button>
+                </div>
+                <article
+                  v-for="job in ragStatus.index_jobs.recent_failed"
+                  :key="job.id"
+                  class="failed-job-item"
+                  :class="{ acknowledged: job.acknowledged_at }"
+                >
+                  <div>
+                    <strong>{{ job.document_id || job.path || job.id }}</strong>
+                    <span>{{ job.acknowledged_at ? "acknowledged" : "unacknowledged" }}</span>
+                  </div>
+                  <p>{{ job.error || "Unknown error" }}</p>
+                  <small>{{ formatDate(job.updated_at || job.created_at) }}</small>
+                </article>
               </div>
               <ul v-if="ragStatus.issues?.length" class="rag-issue-list">
                 <li v-for="issue in ragStatus.issues" :key="issue.name">
@@ -2172,7 +1980,7 @@ checkSession();
                   <h3>{{ document.file_name || document.document_id }}</h3>
                   <p>
                     {{ document.chunk_count }} chunks
-                    <span v-if="document.updated_at"> · {{ formatDate(document.updated_at) }}</span>
+                    <span v-if="document.updated_at"> / {{ formatDate(document.updated_at) }}</span>
                   </p>
                   <p class="document-meta">
                     <span v-if="document.file_ext">{{ document.file_ext }}</span>
@@ -2218,10 +2026,15 @@ checkSession();
             <div class="audit-header">
               <div>
                 <h3>Answer Quality</h3>
-                <p>Latest benchmark report and retrieval quality signals.</p>
+                <p>{{ selectedRagEvalSuiteInfo?.description || "Latest benchmark report and retrieval quality signals." }}</p>
               </div>
               <div class="eval-actions">
-                <select v-model="selectedRagEvalSuite" :disabled="ragEvalRunning">
+                <select
+                  v-if="ragEvalSuites.length > 1"
+                  v-model="selectedRagEvalSuite"
+                  :disabled="ragEvalRunning"
+                  title="Choose which evaluation suite Run test will execute"
+                >
                   <option
                     v-for="suite in ragEvalSuites"
                     :key="suite.id"
@@ -2230,6 +2043,9 @@ checkSession();
                     {{ suite.name }} - {{ suite.question_count }}
                   </option>
                 </select>
+                <span v-else class="eval-suite-label">
+                  {{ selectedRagEvalSuiteInfo?.name || "Uploaded PDF Baseline" }}
+                </span>
                 <button
                   class="secondary-button"
                   type="button"
@@ -2256,6 +2072,7 @@ checkSession();
                 <span>{{ ragEval.report?.name }}</span>
                 <span>{{ formatDate(ragEval.report?.updated_at) }}</span>
                 <span>{{ ragEval.summary?.total || 0 }} questions</span>
+                <span>{{ isRetrievalOnlyReport(ragEval) ? "retrieval only" : "answer quality" }}</span>
               </div>
               <div class="rag-metric-grid eval-metric-grid">
                 <div>
@@ -2273,8 +2090,8 @@ checkSession();
                   <span>{{ ragEval.summary?.average_score == null ? "Top-1" : "Avg score" }}</span>
                 </div>
                 <div>
-                  <strong>{{ Number(ragEval.summary?.mrr || 0).toFixed(3) }}</strong>
-                  <span>MRR</span>
+                  <strong>{{ formatPercent(ragEval.summary?.evidence_hit_rate) }}</strong>
+                  <span>evidence</span>
                 </div>
                 <div>
                   <strong>{{ formatPercent(ragEval.summary?.citation_rate) }}</strong>
@@ -2289,20 +2106,212 @@ checkSession();
                   <span>needs review</span>
                 </div>
               </div>
+              <div v-if="failureReasonEntries(ragEval.summary).length" class="failure-reason-row">
+                <span
+                  v-for="item in failureReasonEntries(ragEval.summary)"
+                  :key="item.reason"
+                >
+                  {{ formatFailureReason(item.reason) }}: {{ item.count }}
+                </span>
+              </div>
+              <div v-if="ragEval.rows?.length" class="eval-result-list">
+                <article
+                  v-for="row in ragEval.rows"
+                  :key="row.id || row.question"
+                  class="eval-result-item"
+                  :class="evalRowStatus(row)"
+                >
+                  <div class="eval-result-header">
+                    <strong>{{ evalRowTitle(row) }}</strong>
+                    <span>{{ evalRowStatusLabel(row) }}</span>
+                  </div>
+                  <p>{{ row.question }}</p>
+                  <div class="eval-result-meta">
+                    <span>expected {{ row.expected_docs || "no source" }}</span>
+                    <span>top {{ formatSourceName(row.top_document) || "none" }}</span>
+                    <span>score {{ formatScore(row.top_score) }}</span>
+                    <span v-if="row.expected_rank">rank {{ row.expected_rank }}</span>
+                    <span v-if="row.evidence_terms_score !== undefined && row.evidence_terms_score !== ''">
+                      evidence {{ Number(row.evidence_terms_score || 0).toFixed(2) }}
+                    </span>
+                    <span v-if="row.failure_reasons?.length">
+                      {{ row.failure_reasons.map(formatFailureReason).join(", ") }}
+                    </span>
+                  </div>
+                  <p v-if="row.answer" class="eval-answer-preview">{{ row.answer }}</p>
+                </article>
+              </div>
               <div v-if="ragEval.failed_rows?.length" class="eval-failure-list">
-                <article v-for="row in ragEval.failed_rows.slice(0, 5)" :key="row.id || row.question">
-                  <strong>{{ row.id || row.category || "case" }}</strong>
+                <h4>Needs review</h4>
+                <article v-for="row in ragEval.failed_rows" :key="row.id || row.question">
+                  <div class="eval-failure-header">
+                    <strong>{{ row.id || row.category || "case" }}</strong>
+                    <span>{{ (row.failure_reasons || []).map(formatFailureReason).join(", ") }}</span>
+                  </div>
                   <p>{{ row.question }}</p>
                   <span>
                     expected {{ row.expected_docs || "no source" }} | top {{ formatSourceName(row.top_document) || "none" }} | score {{ formatScore(row.top_score) }}
+                    <template v-if="row.evidence_terms_score !== undefined && row.evidence_terms_score !== ''">
+                      | evidence {{ Number(row.evidence_terms_score || 0).toFixed(2) }}
+                    </template>
                   </span>
+                  <p v-if="row.answer" class="eval-answer-preview">{{ row.answer }}</p>
                 </article>
               </div>
             </div>
             <p v-else-if="!ragEvalLoading" class="empty-state eval-empty">
               No evaluation report found. Run the RAG evaluation script to populate this panel.
-            </p>
+              </p>
             </template>
+          </section>
+        </div>
+
+        <div v-else-if="isAdmin && activeView === 'token-monitor'" class="users-column">
+          <section class="users-section">
+            <div class="section-header">
+              <div>
+                <h2>Token Monitor</h2>
+                <p>Track model usage across chat, tests, knowledge search, and indexing.</p>
+              </div>
+              <div class="header-actions">
+                <select
+                  :value="modelUsagePeriod"
+                  class="period-select"
+                  @change="setModelUsagePeriod($event.target.value)"
+                >
+                  <option value="today">Today</option>
+                  <option value="last_7_days">Last 7 days</option>
+                  <option value="last_30_days">Last 30 days</option>
+                </select>
+              </div>
+            </div>
+
+            <p v-if="modelUsageError" class="error users-error">{{ modelUsageError }}</p>
+
+            <div class="usage-dashboard">
+              <div class="usage-section">
+                <div class="operations-tabs" role="tablist" aria-label="Token trend grouping">
+                  <button
+                    type="button"
+                    :class="{ active: usageTrendTab === 'model' }"
+                    @click="usageTrendTab = 'model'"
+                  >
+                    By model
+                  </button>
+                  <button
+                    type="button"
+                    :class="{ active: usageTrendTab === 'scenario' }"
+                    @click="usageTrendTab = 'scenario'"
+                  >
+                    By scenario
+                  </button>
+                </div>
+                <div v-if="modelUsageTrendRows(modelUsagePeriod).length" class="usage-bar-chart">
+                  <div class="usage-chart-plot">
+                    <svg viewBox="0 0 300 120" preserveAspectRatio="none" role="img" aria-label="Token usage trend">
+                    <rect
+                      v-for="segment in modelUsageTrendBarSegments(modelUsagePeriod, usageTrendTab)"
+                      :key="`${segment.bucket}-${segment.label}`"
+                      class="usage-bar-segment"
+                      :x="segment.x"
+                      :y="segment.y"
+                      :width="segment.width"
+                      :height="segment.height"
+                      :style="{ fill: segment.color }"
+                      tabindex="0"
+                      @mouseenter="showUsageTrendTooltip(segment)"
+                      @mouseleave="hideUsageTrendTooltip"
+                      @focus="showUsageTrendTooltip(segment)"
+                      @blur="hideUsageTrendTooltip"
+                    />
+                    </svg>
+                    <div
+                      v-if="usageTrendTooltip"
+                      class="usage-chart-tooltip"
+                      :style="{ left: usageTrendTooltip.x, top: usageTrendTooltip.y }"
+                    >
+                      <strong>{{ formatNumber(usageTrendTooltip.tokens) }}</strong>
+                      <span>{{ usageTrendTooltip.label }} / {{ formatUsageTrendBucket(usageTrendTooltip.bucket) }}</span>
+                    </div>
+                  </div>
+                  <div class="usage-chart-axis">
+                    <span
+                      v-for="tick in modelUsageTrendAxisTicks(modelUsagePeriod)"
+                      :key="tick.bucket"
+                      :style="modelUsageTrendAxisTickStyle(tick, modelUsagePeriod)"
+                    >
+                      {{ formatUsageTrendAxisBucket(tick.bucket, modelUsagePeriod) }}
+                    </span>
+                  </div>
+                  <div class="usage-chart-legend">
+                    <span
+                      v-for="series in modelUsageTrendSeries(modelUsagePeriod, usageTrendTab)"
+                      :key="`${series.label}-legend`"
+                    >
+                      <i :style="{ background: series.color }"></i>
+                      {{ series.label }}: {{ formatNumber(series.total) }}
+                    </span>
+                  </div>
+                </div>
+                <p v-else class="empty-state">No trend data for this period.</p>
+              </div>
+
+              <div class="usage-section">
+                <div class="users-subsection-header">
+                  <h3>Recent calls</h3>
+                </div>
+                <template v-if="modelUsageRecentEvents(modelUsagePeriod).length">
+                  <div class="usage-table usage-events-table">
+                    <div class="usage-table-row usage-event-row usage-table-head">
+                      <span>Time</span>
+                      <span>Model</span>
+                      <span>Use</span>
+                      <span>Scenario</span>
+                      <span>Tokens</span>
+                      <span>Input</span>
+                      <span>Output</span>
+                      <span>Chunks/docs</span>
+                      <span>Detail</span>
+                    </div>
+                    <div
+                      v-for="row in pagedModelUsageEvents"
+                      :key="row.id"
+                      class="usage-table-row usage-event-row"
+                    >
+                      <span>{{ formatUsageBucket(row.created_at) }}</span>
+                      <span>{{ row.model }}</span>
+                      <span>{{ formatOperationLabel(row.operation) }}</span>
+                      <span>{{ formatScopeLabel(row.usage_scope) }}</span>
+                      <span>{{ formatNumber(modelUsageTotalTokens(row)) }}</span>
+                      <span>{{ formatNumber(row.input_tokens_estimate) }}</span>
+                      <span>{{ formatNumber(row.output_tokens_estimate) }}</span>
+                      <span>{{ formatNumber(row.document_count) }}</span>
+                      <span>{{ formatUsageEventDetail(row) || "-" }}</span>
+                    </div>
+                  </div>
+                  <div v-if="modelUsageRecentEvents(modelUsagePeriod).length > pageSize" class="pagination">
+                    <button
+                      class="secondary-button"
+                      type="button"
+                      :disabled="usageEventsPage <= 1"
+                      @click="setUsageEventsPage(usageEventsPage - 1)"
+                    >
+                      Previous
+                    </button>
+                    <span>Page {{ usageEventsPage }} / {{ usageEventsTotalPages }}</span>
+                    <button
+                      class="secondary-button"
+                      type="button"
+                      :disabled="usageEventsPage >= usageEventsTotalPages"
+                      @click="setUsageEventsPage(usageEventsPage + 1)"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </template>
+                <p v-else class="empty-state">No recent model calls for this period.</p>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -2655,7 +2664,7 @@ checkSession();
                     >
                       <summary>
                         <span>{{ group.documentName }}</span>
-                        <small>{{ group.department }} · {{ group.sources.length }} chunks</small>
+                        <small>{{ group.department }} / {{ group.sources.length }} chunks</small>
                       </summary>
                       <div class="audit-chunk-list">
                         <article
