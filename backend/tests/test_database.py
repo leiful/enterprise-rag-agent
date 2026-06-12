@@ -1,7 +1,26 @@
 import unittest
+from unittest.mock import patch
 
 import database
 from tests.test_db_utils import patched_postgres_database, reset_test_database
+
+
+class DatabaseConnectionTests(unittest.TestCase):
+    def test_connect_sets_short_connect_timeout(self):
+        with patch.object(database, "DATABASE_URL", "postgresql://user:pass@localhost:5432/app"):
+            with patch.object(database.psycopg, "connect") as connect_mock:
+                connection = connect_mock.return_value
+
+                with database.connect() as result:
+                    self.assertIs(result, connection)
+
+        connect_mock.assert_called_once_with(
+            "postgresql://user:pass@localhost:5432/app",
+            row_factory=database.dict_row,
+            connect_timeout=database.DATABASE_CONNECT_TIMEOUT_SECONDS,
+        )
+        connection.commit.assert_called_once()
+        connection.close.assert_called_once()
 
 
 class DatabaseTests(unittest.TestCase):

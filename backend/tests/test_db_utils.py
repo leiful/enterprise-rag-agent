@@ -9,11 +9,25 @@ import vector_store
 
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
+_test_database_available = None
 
 
 def require_test_database():
+    global _test_database_available
     if not TEST_DATABASE_URL:
         raise unittest.SkipTest("Set TEST_DATABASE_URL to run PostgreSQL integration tests.")
+    if _test_database_available is False:
+        raise unittest.SkipTest("TEST_DATABASE_URL is not reachable.")
+    if _test_database_available is None:
+        with patch.object(database, "DATABASE_URL", TEST_DATABASE_URL):
+            with patch.object(database, "DATABASE_CONNECT_TIMEOUT_SECONDS", 1):
+                try:
+                    with database.connect() as connection:
+                        connection.execute("SELECT 1").fetchone()
+                except Exception as error:
+                    _test_database_available = False
+                    raise unittest.SkipTest(f"TEST_DATABASE_URL is not reachable: {error}")
+        _test_database_available = True
 
 
 def reset_test_database():

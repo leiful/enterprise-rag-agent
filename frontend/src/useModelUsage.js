@@ -3,7 +3,7 @@ import {
   formatScopeLabel,
   formatUsageBucket,
   formatUsageDay,
-} from "./formatters";
+} from "./formatters.js";
 
 export function useModelUsage({ modelUsage, ragStatus, isAdmin, dailyTokenWarningThreshold }) {
   const modelUsagePeriod = ref("today");

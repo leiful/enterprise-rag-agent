@@ -150,7 +150,7 @@ defineExpose({ scrollToBottom });
             </details>
           </div>
           <p v-else-if="message.content" class="source-empty">
-            鏈洖绛旀湭浣跨敤鐭ヨ瘑搴撴潵婧?
+            本回答未使用知识库来源。
           </p>
         </div>
       </article>

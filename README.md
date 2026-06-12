@@ -1,50 +1,87 @@
 # Enterprise RAG Agent
 
-This project is a local enterprise RAG assistant and operations console with:
+Local enterprise RAG assistant and operations console.
 
-- FastAPI backend
-- Vue 3 frontend
-- Login-protected chat and conversation history
-- PostgreSQL metadata storage
-- Chroma vector search with BM25 hybrid retrieval
-- Knowledge source sync, upload, indexing, deduplication, and audit trails
-- Department-aware knowledge access controls
-- RAG evaluation reports, user feedback, and model usage monitoring
-- unittest coverage for backend behavior
+## What It Includes
 
-## Structure
+- FastAPI backend with login-protected chat and conversation history.
+- Vue 3 frontend for chat, knowledge management, users, operations, and token monitoring.
+- PostgreSQL metadata storage for users, sessions, conversations, knowledge metadata, audit events, feedback, and model usage.
+- Chroma vector persistence with PostgreSQL chunk metadata and BM25 hybrid retrieval.
+- Knowledge upload, local source sync, indexing jobs, deduplication, access control, and RAG evaluation.
+
+## Project Layout
 
 ```text
-backend/
-  main.py              FastAPI app and route wiring
-  AI_agent.py          Agent compatibility facade
-  chains/              Retrieval and answer chains
-  services/            Agent, knowledge, rerank, and tool runtimes
-  database.py          PostgreSQL schema and data access helpers
-  vector_store.py      Chroma/BM25 vector store integration
-  rag_eval_runtime.py  RAG evaluation suite and report helpers
-  tests/               Backend tests
-
-frontend/
-  src/                 Vue 3 operations console
-  package.json         Frontend dependencies and scripts
-
-scripts/               RAG evaluation and maintenance scripts
-rag_eval/              Evaluation questions and generated reports
-knowledge_files/       Local knowledge source files
-chroma_db/             Local Chroma persistence directory
-run_tests.py           Runs backend tests
-.env.example           Local environment template
-frontend/.env.example  Frontend environment template
+backend/       FastAPI app, routes, services, RAG chains, database helpers, tests
+frontend/      Vue 3 browser app
+scripts/       RAG evaluation and maintenance scripts
+rag_eval/      Evaluation questions and generated reports
+knowledge_files/ Local knowledge source files, ignored by Git
+chroma_db/     Local Chroma persistence directory, ignored by Git
+compose.yml    Local PostgreSQL service for development
+run_tests.py   Backend unittest runner
 ```
 
-## Setup
+## Local Architecture
 
-Create `.env` in the project root. `DEEPSEEK_API_KEY` is used by the backend to call
-the model provider. `APP_USERNAME` and `APP_PASSWORD` are used for local login.
-`EMBEDDING_API_KEY` is used for vector search embeddings.
-`VECTOR_STORE_BACKEND=chroma` enables the LangChain + Chroma vector backend while
-keeping PostgreSQL metadata and BM25 indexes available.
+For local development, keep the application code on Windows and run PostgreSQL in Docker:
+
+```text
+Windows:
+  backend, frontend, .venv, npm, .env, knowledge_files, chroma_db
+
+Docker:
+  PostgreSQL container ai-agent-postgres
+  PostgreSQL volume aiagent_ai_agent_postgres_data
+```
+
+The backend connects to PostgreSQL through `localhost:5432`.
+
+## Start PostgreSQL
+
+From the project root:
+
+```powershell
+docker compose up -d
+```
+
+Check the container:
+
+```powershell
+docker ps
+```
+
+Open the main database:
+
+```powershell
+docker exec -it ai-agent-postgres psql -U ai_agent_user -d ai_agent
+```
+
+Exit `psql` with:
+
+```sql
+\q
+```
+
+Create the test database once:
+
+```powershell
+docker exec -it ai-agent-postgres psql -U ai_agent_user -d postgres
+```
+
+```sql
+CREATE USER ai_agent_test_user WITH PASSWORD '123456';
+CREATE DATABASE ai_agent_test OWNER ai_agent_test_user;
+GRANT ALL PRIVILEGES ON DATABASE ai_agent_test TO ai_agent_test_user;
+\q
+```
+
+Use a stronger local password when keeping data long term. If a Docker volume already exists, changing `POSTGRES_PASSWORD` in `compose.yml` does not change the existing database password; use `ALTER USER` in PostgreSQL and update `.env`.
+
+## Environment
+
+Create `.env` in the project root. Real secrets belong only in backend environment variables.
 
 ```env
 DEEPSEEK_API_KEY=your_api_key_here
@@ -52,8 +89,9 @@ APP_ENV=development
 EMBEDDING_API_KEY=your_dashscope_api_key_here
 EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EMBEDDING_MODEL=text-embedding-v4
-DATABASE_URL=postgresql://ai_agent_user:your_password_here@localhost:5432/ai_agent
-TEST_DATABASE_URL=postgresql://ai_agent_test_user:your_password_here@localhost:5432/ai_agent_test
+DATABASE_URL=postgresql://ai_agent_user:123456@localhost:5432/ai_agent
+TEST_DATABASE_URL=postgresql://ai_agent_test_user:123456@localhost:5432/ai_agent_test
+DATABASE_CONNECT_TIMEOUT_SECONDS=3
 VECTOR_STORE_BACKEND=chroma
 CHROMA_PERSIST_DIR=E:\Project\AI Agent\chroma_db
 CHROMA_COLLECTION_NAME=agent_knowledge
@@ -73,78 +111,35 @@ Create `frontend/.env`:
 VITE_API_BASE=http://localhost:8000
 ```
 
-Install backend dependencies:
+## Install Dependencies
 
-```bash
+Backend:
+
+```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 ```
 
-Install frontend dependencies:
+Frontend:
 
-```bash
+```powershell
 cd frontend
 npm.cmd install --cache .npm-cache
 ```
 
-## Run Tests
+## Run The App
 
-From the project root:
+Backend:
 
-```bash
-.\.venv\Scripts\python.exe run_tests.py
-```
-
-Common focused runs:
-
-```bash
-.\.venv\Scripts\python.exe run_tests.py --group fast
-.\.venv\Scripts\python.exe run_tests.py --group api
-.\.venv\Scripts\python.exe run_tests.py --group database
-.\.venv\Scripts\python.exe run_tests.py --group vector
-.\.venv\Scripts\python.exe run_tests.py test_rag_status.RagStatusTests
-```
-
-Database and API integration tests require `TEST_DATABASE_URL` to point at a
-dedicated PostgreSQL test database. The test runner truncates application tables
-in that database, so do not point it at production data. Without
-`TEST_DATABASE_URL`, PostgreSQL integration tests are skipped while pure unit
-tests still run.
-
-Build the frontend:
-
-```bash
-cd frontend
-npm.cmd run build
-```
-
-## Run Backend
-
-From the project root:
-
-```bash
-cd backend
-..\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-For local debugging with hot reload, use:
-
-```bash
+```powershell
 cd backend
 ..\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Health check:
+Frontend:
 
-```text
-http://localhost:8000/health
-```
-
-## Run Frontend
-
-From `frontend/`:
-
-```bash
+```powershell
+cd frontend
 npm.cmd run dev
 ```
 
@@ -154,199 +149,73 @@ Open:
 http://localhost:5173
 ```
 
-## Login Protection
-
-The browser app logs in with `/login`. After a successful login, the backend
-creates a random session id, stores it in PostgreSQL, and sends it to the browser as
-an `HttpOnly` session cookie. Protected routes such as `/chat` and `/files`
-require that session cookie. The default session lifetime is one week
-(`SESSION_MAX_AGE_SECONDS=604800`).
-
-The backend initializes its PostgreSQL tables on startup using `DATABASE_URL`.
-The database contains:
+Health check:
 
 ```text
-users      usernames and password hashes
-sessions   random session ids, user ids, and expiration times
-vector_chunks  document chunks and embedding vectors for vector search
+http://localhost:8000/health
 ```
 
-For production deployments, set `APP_ENV=production`, use HTTPS, set
-`SESSION_COOKIE_SECURE=true`, disable `CORS_ALLOW_LOCALHOST_REGEX`, and restrict
-`CORS_ALLOWED_ORIGINS` to the real frontend origin.
+## Run Tests
 
-## Enterprise RAG Operations
+Fast backend tests:
 
-Admins can inspect RAG operating status with:
+```powershell
+.\.venv\Scripts\python.exe run_tests.py --group fast
+```
+
+Database-backed test groups must be run serially because they reset the same `ai_agent_test` database:
+
+```powershell
+.\.venv\Scripts\python.exe run_tests.py --group database
+.\.venv\Scripts\python.exe run_tests.py --group vector
+.\.venv\Scripts\python.exe run_tests.py --group api
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm.cmd test
+npm.cmd run build
+```
+
+If `TEST_DATABASE_URL` is missing or unreachable, PostgreSQL integration tests are skipped. The test database is truncated during integration tests, so never point `TEST_DATABASE_URL` at real application data.
+
+## Common Operations
+
+RAG status:
 
 ```text
 GET /admin/rag/status
 ```
 
-Admins can inspect management actions such as user, department, source sync, and
-knowledge indexing changes with:
+Admin audit:
 
 ```text
 GET /admin/audit
 ```
 
-The response summarizes document and chunk counts, knowledge source file states,
-index job states, BM25 stats, retrieval feature flags, and knowledge access audit
-event counts. This is useful for deployment checks and for spotting failed jobs,
-unsynced sources, or source files that disappeared.
-
-The default retrieval profile is tuned for enterprise knowledge bases: query
-rewrite, multi-query expansion, and reranking are enabled by default; recall is
-broadened before rerank; and answer preflight includes document metadata such as
-department, sensitivity, owner, version, and effective dates when available.
-Deployments can tune this profile in `.env`:
-
-```env
-ENABLE_QUERY_REWRITE=true
-ENABLE_MULTI_QUERY=true
-ENABLE_RERANK=true
-RECALL_K=24
-DEFAULT_KNOWLEDGE_TOP_K=5
-DEFAULT_KNOWLEDGE_MIN_SCORE=0.25
-MULTI_QUERY_COUNT=4
-HYBRID_BM25_WEIGHT=0.40
-HYBRID_VECTOR_WEIGHT=0.60
-```
-
-When a registered local knowledge source is synced, files that have disappeared
-from the source folder are marked `missing` and their vector/BM25 indexes are
-removed so stale enterprise content is no longer returned by RAG.
-The startup-created default local source uses `DEFAULT_KNOWLEDGE_SOURCE_PATH`,
-which defaults to the project's `knowledge_files/` directory when the setting is
-omitted.
-
-## Vector Search
-
-The backend uses LangChain + Chroma persistent vector storage when
-`VECTOR_STORE_BACKEND=chroma`. It keeps chunk metadata, BM25 indexes, sessions,
-conversations, indexing jobs, knowledge sources, and audit records in
-PostgreSQL, so hybrid search and the existing APIs continue to work.
-Chroma may create its own `chroma.sqlite3` file under `CHROMA_PERSIST_DIR`; that
-file belongs to Chroma's internal storage and is not the application's database.
-
-It uses the OpenAI-compatible embeddings API, so Alibaba Cloud Model Studio
-works with:
-
-```env
-EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-EMBEDDING_MODEL=text-embedding-v4
-VECTOR_STORE_BACKEND=chroma
-```
-
-Basic usage from the project root:
-
-```powershell
-.\.venv\Scripts\python.exe
-```
-
-```python
-import sys
-sys.path.insert(0, "backend")
-
-import vector_store
-
-vector_store.init_vector_store()
-vector_store.upsert_document(
-    "agent_intro",
-    "AI Agent needs tool calling, memory, planning, and reflection."
-)
-
-results = vector_store.search("how to learn agent tools")
-for result in results:
-    print(result.score, result.document_id, result.text)
-```
-
-## RAG Evaluation
-
-The repository includes a small RAG evaluation pack in `rag_eval/`.
+Latest local RAG evaluation report:
 
 ```text
-rag_eval/sample_docs/   Markdown documents for upload
-rag_eval/questions.json Evaluation questions and expected source documents
-rag_eval/uploaded_pdf_questions.json Questions for the three uploaded PDF documents
-scripts/rag_eval.py     Uploads docs, asks questions, and writes reports
+GET /admin/rag/eval
 ```
 
-Start the backend first, then run from the project root:
+Run the local RAG evaluation script after starting the backend:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\rag_eval.py
 ```
 
-The script reads `APP_USERNAME` and `APP_PASSWORD` from `.env`, uploads the
-sample documents, calls `/knowledge/search` and `/chat`, then writes JSON, CSV,
-and Markdown reports under `rag_eval/reports/`.
+## Production Notes
 
-Useful options:
+- Set `APP_ENV=production`.
+- Use HTTPS.
+- Set `SESSION_COOKIE_SECURE=true`.
+- Set `CORS_ALLOW_LOCALHOST_REGEX=false`.
+- Restrict `CORS_ALLOWED_ORIGINS` to the production frontend origin.
+- Use strong application and database passwords.
+- Deploy only `frontend/dist/` as static frontend content.
+- Do not expose `.env`, `backend/`, `frontend/src/`, `knowledge_files/`, `chroma_db/`, `logs/`, or PostgreSQL data as public static files.
 
-```powershell
-.\.venv\Scripts\python.exe scripts\rag_eval.py --skip-upload
-.\.venv\Scripts\python.exe scripts\rag_eval.py --skip-chat
-.\.venv\Scripts\python.exe scripts\rag_eval.py --top-k 5 --min-score 0.4
-.\.venv\Scripts\python.exe scripts\rag_eval.py --skip-upload --questions rag_eval\uploaded_pdf_questions.json --top-k 10 --min-score 0.1
-```
-
-Each run writes JSON, CSV, Markdown, RAGAS JSONL, and DeepEval JSON artifacts.
-The RAGAS/DeepEval files are prepared inputs for those frameworks; the default
-script still runs local deterministic checks so the baseline evaluation works
-without extra dependencies.
-
-The admin RAG Evaluation panel also exposes an `Uploaded PDF Baseline` suite for
-the three already-uploaded PDF documents.
-
-Convert a small public RAG benchmark JSONL sample into local eval files:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\rag_benchmark_download.py --config emanual --split test --limit 5
-.\.venv\Scripts\python.exe scripts\rag_benchmark_prepare.py
-.\.venv\Scripts\python.exe scripts\rag_eval.py --docs-dir rag_eval\generated\docs --questions rag_eval\generated\questions.json
-```
-
-Requests without a login session are rejected:
-
-```powershell
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:8000/chat `
-  -ContentType 'application/json' `
-  -Body '{"message":"hello"}'
-```
-
-Expected result:
-
-```text
-{"detail":"Login required."}
-```
-
-Log in and keep the session cookie:
-
-```powershell
-$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:8000/login `
-  -WebSession $session `
-  -ContentType 'application/json' `
-  -Body '{"username":"admin","password":"change_this_local_password"}'
-```
-
-Use the logged-in session:
-
-```powershell
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:8000/chat `
-  -WebSession $session `
-  -ContentType 'application/json' `
-  -Body '{"message":"hello"}'
-```
-
-## Notes
-
-- `.env`, chat history, chat logs, frontend build output, and dependency folders are ignored by Git.
-- Chroma persistence output and local database artifacts are ignored by Git.
-- Real secrets belong on the backend. Do not put passwords or model API keys in frontend `VITE_` variables.
-- Dangerous file tools require confirmation in the CLI flow.
-- `/health` is public so deployments can check whether the backend is running.
+See `ENGINEERING_NOTES.md` for architecture and maintenance details.

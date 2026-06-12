@@ -100,6 +100,13 @@ class RunToolCallTests(unittest.TestCase):
 
 
 class RunAgentTests(unittest.TestCase):
+    def setUp(self):
+        self.model_usage_patch = patch("services.agent_runtime.record_model_usage")
+        self.record_model_usage = self.model_usage_patch.start()
+
+    def tearDown(self):
+        self.model_usage_patch.stop()
+
     def test_build_user_message_with_knowledge_preflight(self):
         with patch(
             "AI_agent.build_knowledge_preflight",
@@ -271,6 +278,13 @@ class RunAgentTests(unittest.TestCase):
 
 
 class RerankTests(unittest.TestCase):
+    def setUp(self):
+        self.model_usage_patch = patch("services.rerank_service.record_model_usage")
+        self.record_model_usage = self.model_usage_patch.start()
+
+    def tearDown(self):
+        self.model_usage_patch.stop()
+
     def test_dashscope_rerank_orders_candidates_and_filters_low_scores(self):
         candidates = [
             SearchResult(0.1, "chunk-a", "doc-a", 0, "weak evidence"),

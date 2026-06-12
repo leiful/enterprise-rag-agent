@@ -1,4 +1,4 @@
-import { EMPTY_MESSAGE } from "./appConfig";
+import { EMPTY_MESSAGE } from "./appConfig.js";
 
 export function formatStatusCount(counts, key) {
   return Number(counts?.[key] || 0);

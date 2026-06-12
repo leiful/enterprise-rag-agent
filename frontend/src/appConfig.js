@@ -1,4 +1,6 @@
-export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const viteEnv = import.meta.env || {};
+
+export const API_BASE = viteEnv.VITE_API_BASE || "http://localhost:8000";
 
 export const DEFAULT_RAG_EVAL_SUITES = [
   { id: "core", name: "Core Regression", question_count: 20 },

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from config import APP_PASSWORD, APP_USERNAME, DATABASE_URL
+from config import APP_PASSWORD, APP_USERNAME, DATABASE_CONNECT_TIMEOUT_SECONDS, DATABASE_URL
 
 
 PBKDF2_ITERATIONS = 600_000
@@ -28,7 +28,11 @@ def _require_database_url():
 @contextmanager
 def connect():
     _require_database_url()
-    connection = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    connection = psycopg.connect(
+        DATABASE_URL,
+        row_factory=dict_row,
+        connect_timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
+    )
     try:
         yield connection
         connection.commit()
