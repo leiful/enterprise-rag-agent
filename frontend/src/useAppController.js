@@ -192,7 +192,8 @@ const { checkSession, closeSettingsMenu, loadConversations, login, logout, onDoc
   },
   helpers: {
     cloneMessages,
-      normalizeMessages,
+    emptyMessages: () => normalizeMessages([]),
+    normalizeMessages,
     decodeSourcesHeader,
   },
 }));

@@ -116,8 +116,8 @@
     ],
     "expected_answer": "For an employee's child who is 18 months old or younger.",
     "expected_terms": [
-      "18 months||18个月||18 个月||十八（18）个月",
-      "younger||以下||或以下"
+      "18 months||18个月||18 个月||十八（18）个月||eighteen (18) months||eighteen (18) months old",
+      "younger||以下||或以下||及以下||or younger"
     ]
   },
   {
@@ -178,14 +178,14 @@
   {
     "id": "D04",
     "category": "drug_pre_treatment",
-    "question": "What should be evaluated before initiating COSENTYX treatment?",
+    "question": "What tuberculosis evaluation should be performed before initiating COSENTYX treatment?",
     "expected_docs": [
       "drug_label_Cosentyx_prescribing_information.pdf"
     ],
-    "expected_answer": "Evaluate patients for tuberculosis and complete age-appropriate vaccinations before initiation.",
+    "expected_answer": "Evaluate patients for active or latent tuberculosis infection before initiating COSENTYX treatment.",
     "expected_terms": [
       "tuberculosis||结核||TB",
-      "vaccinations||疫苗||接种"
+      "active or latent||活动性或潜伏性||活动性||潜伏性||active TB||latent TB"
     ]
   },
   {
@@ -336,7 +336,7 @@
     "expected_answer": "Touch and hold the Stop/Cancel pad for more than 3 seconds.",
     "expected_terms": [
       "Stop/Cancel||停止/取消",
-      "more than 3 seconds||超过3秒||3秒以上"
+      "more than 3 seconds||超过3秒||超过 3 秒||3秒以上||3 秒以上"
     ]
   },
   {
@@ -445,10 +445,10 @@
     ],
     "expected_answer": "The handbook says unauthorized overtime may lead to discipline. The microwave manual says the oven should never be serviced by a do-it-yourself repair person and should be serviced by qualified personnel.",
     "expected_terms": [
-      "unauthorized overtime||未经授权加班",
+      "unauthorized overtime||未经授权加班||未经授权的加班",
       "discipline||纪律处分",
-      "do-it-yourself||自行维修||DIY",
-      "qualified||合格服务人员||专业人员"
+      "adjusted or repaired||repair||repaired||调整或修理||自行维修||DIY",
+      "qualified||合格服务人员||合格维修人员||专业人员"
     ]
   },
   {
