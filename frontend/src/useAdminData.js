@@ -46,6 +46,10 @@ export function useAdminData({ API_BASE, refs, pageSize, missingDocFeedback }) {
     balanceError,
   } = refs;
 
+  function deepseekBalanceSupported() {
+    return ragStatus.value?.model?.balance_supported === true;
+  }
+
   async function loadKnowledgeDocuments() {
     const response = await fetch(`${API_BASE}/knowledge/documents`, {
       credentials: "include",
@@ -94,6 +98,10 @@ export function useAdminData({ API_BASE, refs, pageSize, missingDocFeedback }) {
       }
 
       ragStatus.value = await response.json();
+      if (!deepseekBalanceSupported()) {
+        deepseekBalance.value = null;
+        balanceError.value = "";
+      }
     } catch (err) {
       if (!silent) {
         ragStatusError.value = err.message || "Failed to load RAG status";
@@ -367,6 +375,13 @@ export function useAdminData({ API_BASE, refs, pageSize, missingDocFeedback }) {
   }
 
   async function loadDeepseekBalance() {
+    if (!isAdmin.value || !deepseekBalanceSupported()) {
+      deepseekBalance.value = null;
+      balanceError.value = "";
+      balanceLoading.value = false;
+      return;
+    }
+
     if (balanceLoading.value) {
       return;
     }

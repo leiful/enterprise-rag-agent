@@ -13,6 +13,7 @@ const {
   activeView,
   chatAdmissionLabel,
   shouldShowDailyTokenWarning,
+  shouldShowDeepseekBalance,
   formatNumber,
   todayTokenTotal,
   balanceError,
@@ -52,7 +53,7 @@ const {
             Token high
           </span>
           <span
-            v-if="isAuthenticated && isAdmin"
+            v-if="isAuthenticated && isAdmin && shouldShowDeepseekBalance"
             class="balance-status"
             :class="{ unavailable: balanceError || deepseekBalance?.is_available === false }"
           >
@@ -124,18 +125,6 @@ const {
 </template>
 
 <style scoped>
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.message-time {
-  font-size: 12px;
-  color: #888;
-}
-
 .conversation-item {
   text-align: left;
 }

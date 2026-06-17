@@ -1,61 +1,61 @@
-# Production Readiness Checklist
+# 生产就绪检查清单
 
-Use this checklist before promoting the enterprise RAG agent beyond local or internal test usage.
+在将企业 RAG Agent 从本地或内部测试环境提升到正式使用前，请先完成这份检查清单。
 
-## Secrets And Environment
+## 密钥与环境变量
 
-- Set `APP_ENV=production`.
-- Set strong `APP_USERNAME` and `APP_PASSWORD` values.
-- Set `DEEPSEEK_API_KEY` only in the backend runtime environment.
-- Set `EMBEDDING_API_KEY` only in the backend runtime environment.
-- Keep real secrets out of `frontend/.env` because `VITE_` values are bundled into browser code.
-- Keep `.env` out of Git and out of public static hosting.
+- 设置 `APP_ENV=production`。
+- 为 `APP_USERNAME` 和 `APP_PASSWORD` 设置足够强的值。
+- 只在后端运行环境中设置 `DEEPSEEK_API_KEY`。
+- 只在后端运行环境中设置 `EMBEDDING_API_KEY`。
+- 不要把真实密钥放进 `frontend/.env`，因为 `VITE_` 变量会被打包进浏览器代码。
+- 确保 `.env` 不进入 Git，也不要暴露在公开静态托管目录中。
 
-## HTTPS, Cookies, And CORS
+## HTTPS、Cookie 与 CORS
 
-- Serve the frontend and backend over HTTPS.
-- Set `SESSION_COOKIE_SECURE=true`.
-- Use `SESSION_COOKIE_SAMESITE=lax` for same-site deployments.
-- Use `SESSION_COOKIE_SAMESITE=none` only when cross-site cookies are required and HTTPS is enabled.
-- Set `CORS_ALLOW_LOCALHOST_REGEX=false`.
-- Set `CORS_ALLOWED_ORIGINS` to the exact production frontend origin.
-- Do not use wildcard CORS origins with credentialed browser sessions.
+- 前后端都通过 HTTPS 提供服务。
+- 设置 `SESSION_COOKIE_SECURE=true`。
+- 同站点部署时使用 `SESSION_COOKIE_SAMESITE=lax`。
+- 只有在确实需要跨站点 cookie 且已启用 HTTPS 时，才使用 `SESSION_COOKIE_SAMESITE=none`。
+- 设置 `CORS_ALLOW_LOCALHOST_REGEX=false`。
+- 将 `CORS_ALLOWED_ORIGINS` 精确设置为生产前端来源。
+- 对带凭证的浏览器会话，不要使用通配符 CORS 来源。
 
-## Data Boundaries
+## 数据边界
 
-- Back up PostgreSQL before deploying schema or data-access changes.
-- Back up the Chroma persistence directory before rebuilding or replacing indexes.
-- Keep `knowledge_files/`, `chroma_db/`, `logs/`, and `.env` outside public web roots.
-- Deploy only `frontend/dist/` as static frontend content.
-- Run the backend as a server process behind a reverse proxy or service manager.
+- 在部署 schema 或数据访问逻辑变更前，先备份 PostgreSQL。
+- 在重建或替换索引前，先备份 Chroma 持久化目录。
+- 将 `knowledge_files/`、`chroma_db/`、`logs/` 和 `.env` 放在公开 Web 根目录之外。
+- 静态前端只部署 `frontend/dist/`。
+- 后端应作为服务进程运行在反向代理或服务管理器后面。
 
-## Logging And Audit
+## 日志与审计
 
-- Confirm backend logs are written to a private location.
-- Confirm log rotation is enabled or storage limits are monitored.
-- Confirm admin audit events are visible from `/admin/audit`.
-- Confirm knowledge access audit events are visible from `/admin/knowledge-audit`.
-- Review whether logs contain sensitive document excerpts before enabling broad operator access.
+- 确认后端日志写入的是私有位置。
+- 确认已启用日志轮转，或已监控存储上限。
+- 确认可以通过 `/admin/audit` 查看管理员审计事件。
+- 确认可以通过 `/admin/knowledge-audit` 查看知识访问审计事件。
+- 在向更大范围运维人员开放日志访问前，先检查日志中是否包含敏感文档摘录。
 
-## RAG Quality Gates
+## RAG 质量门禁
 
-- Run the maintained RAG evaluation suite before release.
-- Review failure reasons for citation misses, expected source misses, and abstention failures.
-- Confirm uploaded knowledge documents have department metadata where required.
-- Confirm missing source files are acknowledged or cleared.
-- Confirm failed index jobs are either fixed or explicitly acknowledged.
+- 发布前运行维护好的 RAG 评测套件。
+- 检查引用缺失、预期来源缺失和应拒答却未拒答等失败原因。
+- 确认已上传知识文档在需要时带有部门元数据。
+- 确认缺失的来源文件已被确认或清理。
+- 确认失败的索引任务已修复，或已被明确标记为已确认。
 
-## Operational Checks
+## 运维检查
 
-- Confirm `/health` reports `ok` before opening traffic.
-- Confirm `/admin/rag/status` shows expected document, chunk, BM25, Chroma, and model usage signals.
-- Confirm login, chat, streaming chat, knowledge search, upload, sync, and feedback flows work with a non-admin account and an admin account.
-- Confirm daily token warning thresholds match the deployment budget.
+- 开放流量前确认 `/health` 返回 `ok`。
+- 确认 `/admin/rag/status` 展示的文档数、分块数、BM25、Chroma 和模型用量等信号符合预期。
+- 确认普通账号和管理员账号下的登录、聊天、流式聊天、知识搜索、上传、同步和反馈流程都能正常工作。
+- 确认每日 token 告警阈值符合部署预算。
 
-## Rollback
+## 回滚
 
-- Keep the previous backend release artifact available.
-- Keep the previous frontend `dist/` artifact available.
-- Record the PostgreSQL backup timestamp used for rollback.
-- Record the Chroma backup path used for rollback.
-- If rollback restores older code, restore matching database and Chroma snapshots when schema or index behavior changed.
+- 保留上一版后端发布产物。
+- 保留上一版前端 `dist/` 产物。
+- 记录用于回滚的 PostgreSQL 备份时间戳。
+- 记录用于回滚的 Chroma 备份路径。
+- 如果回滚到旧代码，而 schema 或索引行为已发生变化，则同时恢复匹配的数据库和 Chroma 快照。

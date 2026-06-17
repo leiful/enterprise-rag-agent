@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Console Overview Placeholder</title>
+  <desc id="desc">Placeholder image for the application console overview screenshot.</desc>
+  <rect width="1200" height="700" fill="#f8fafc"/>
+  <rect x="40" y="40" width="1120" height="620" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="40" y="40" width="1120" height="64" rx="20" fill="#e2e8f0"/>
+  <circle cx="88" cy="72" r="10" fill="#ef4444"/>
+  <circle cx="120" cy="72" r="10" fill="#f59e0b"/>
+  <circle cx="152" cy="72" r="10" fill="#22c55e"/>
+  <rect x="72" y="144" width="240" height="460" rx="14" fill="#f1f5f9"/>
+  <rect x="344" y="144" width="744" height="120" rx="14" fill="#dbeafe"/>
+  <rect x="344" y="288" width="744" height="210" rx="14" fill="#f8fafc" stroke="#dbeafe" stroke-width="2"/>
+  <rect x="344" y="522" width="744" height="82" rx="14" fill="#eef2ff"/>
+  <text x="600" y="360" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" fill="#334155">Replace with Console Overview Screenshot</text>
+  <text x="600" y="408" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#64748b">Recommended: dashboard, chat, and operations summary in one frame</text>
+</svg>

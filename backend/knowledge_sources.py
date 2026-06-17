@@ -46,7 +46,7 @@ def ensure_default_local_source():
     source = database.upsert_knowledge_source(
         "Local folder",
         LOCAL_FOLDER,
-        str(DEFAULT_KNOWLEDGE_SOURCE_PATH),
+        knowledge.store_path_value(DEFAULT_KNOWLEDGE_SOURCE_PATH),
         enabled=True,
     )
     return format_source(source)
@@ -83,7 +83,7 @@ def sync_source(source_id, enqueue_index):
     if not source["enabled"]:
         return None, "source is disabled"
 
-    root = Path(source["path"]).resolve()
+    root = knowledge.resolve_project_path(source["path"])
     if not root.is_dir():
         return None, f"source path is not a directory: {source['path']}"
 
@@ -103,14 +103,14 @@ def sync_source(source_id, enqueue_index):
             skipped += 1
             continue
 
-        relative_source_path = str(path.relative_to(root))
+        relative_source_path = path.relative_to(root).as_posix()
         path_parts = Path(relative_source_path).parts
         department = path_parts[0] if len(path_parts) > 1 else None
         seen_paths.add(relative_source_path)
         content_hash = file_hash(path)
         stat = path.stat()
         modified_at = utc_from_timestamp(stat.st_mtime)
-        document_id = f"source-{source_id}__{relative_source_path.replace('\\', '__').replace('/', '__')}"
+        document_id = f"source-{source_id}__{relative_source_path.replace('/', '__')}"
         previous = known_files.get(relative_source_path)
         duplicate_document_id = vector_store.find_document_by_content_hash(
             content_hash,
@@ -142,7 +142,7 @@ def sync_source(source_id, enqueue_index):
             unchanged += 1
             continue
 
-        relative_project_path = str(path.relative_to(knowledge.PROJECT_ROOT)) if path.is_relative_to(knowledge.PROJECT_ROOT) else str(path)
+        relative_project_path = knowledge.store_path_value(path)
         job_id = enqueue_index(
             path=relative_project_path,
             document_id=document_id,

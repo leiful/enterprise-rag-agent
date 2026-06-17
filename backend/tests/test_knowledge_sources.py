@@ -3,32 +3,36 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import knowledge
 import knowledge_sources
 
 
 class KnowledgeSourceTests(unittest.TestCase):
     def test_default_local_source_uses_configured_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            configured_path = Path(temp_dir) / "enterprise_docs"
+            project_root = Path(temp_dir)
+            configured_path = project_root / "enterprise_docs"
             source = {
                 "id": 1,
                 "name": "Local folder",
                 "type": knowledge_sources.LOCAL_FOLDER,
-                "path": str(configured_path),
+                "path": "enterprise_docs",
                 "enabled": True,
                 "last_sync_result_json": None,
             }
             with patch.object(knowledge_sources, "DEFAULT_KNOWLEDGE_SOURCE_PATH", configured_path):
-                with patch("knowledge_sources.database.upsert_knowledge_source", return_value=source) as upsert_source:
-                    result = knowledge_sources.ensure_default_local_source()
+                with patch.object(knowledge, "PROJECT_ROOT", project_root):
+                    with patch.object(knowledge, "KNOWLEDGE_FILES_DIR", project_root / "knowledge_files"):
+                        with patch("knowledge_sources.database.upsert_knowledge_source", return_value=source) as upsert_source:
+                            result = knowledge_sources.ensure_default_local_source()
 
         upsert_source.assert_called_once_with(
             "Local folder",
             knowledge_sources.LOCAL_FOLDER,
-            str(configured_path),
+            "enterprise_docs",
             enabled=True,
         )
-        self.assertEqual(result["path"], str(configured_path))
+        self.assertEqual(result["path"], "enterprise_docs")
 
     def test_sync_source_removes_indexes_for_missing_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -75,6 +75,19 @@ WINDOWS_RESERVED_FILENAMES = {
 }
 
 
+def resolve_project_path(path_value):
+    raw_path = Path(str(path_value))
+    return raw_path.resolve() if raw_path.is_absolute() else (PROJECT_ROOT / raw_path).resolve()
+
+
+def store_path_value(path_value):
+    resolved = resolve_project_path(path_value)
+    try:
+        return resolved.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
 def normalize_metadata_text(value, field_name, max_length=200):
     if value in (None, ""):
         return None, None
@@ -284,8 +297,7 @@ def make_document_id(path: Path, fingerprint: dict = None, use_original_name: bo
 
 
 def resolve_knowledge_file(path):
-    raw_path = Path(path)
-    target = raw_path.resolve() if raw_path.is_absolute() else (PROJECT_ROOT / raw_path).resolve()
+    target = resolve_project_path(path)
 
     try:
         target.relative_to(PROJECT_ROOT)
@@ -314,7 +326,7 @@ def is_registered_source_file(target):
             if source["type"] != "local_folder" or not source["enabled"]:
                 continue
             try:
-                resolved.relative_to(Path(source["path"]).resolve())
+                resolved.relative_to(resolve_project_path(source["path"]))
                 return True
             except ValueError:
                 continue
@@ -381,7 +393,7 @@ def index_file(path, document_id=None, embedding_client=None, notes=None, catego
         existing_metadata = vector_store.get_document_metadata(duplicate_of) or {}
         existing_chunks = vector_store.list_document_chunks(duplicate_of)
         try:
-            result_path = str(target.relative_to(PROJECT_ROOT))
+            result_path = target.relative_to(PROJECT_ROOT).as_posix()
         except ValueError:
             result_path = str(target)
         return {
@@ -399,10 +411,7 @@ def index_file(path, document_id=None, embedding_client=None, notes=None, catego
         }, None
     
     normalized_notes = normalize_notes(notes)
-    try:
-        source_path = str(target.relative_to(PROJECT_ROOT))
-    except ValueError:
-        source_path = str(target)
+    source_path = store_path_value(target)
 
     if not force_reindex and fingerprint and fingerprint.get("content_hash"):
         current_chunks = vector_store.list_document_chunks(document_id)
@@ -498,7 +507,7 @@ def source_path_from_metadata(document_id, metadata=None):
     candidates = []
 
     if source_path:
-        candidates.append(PROJECT_ROOT / source_path)
+        candidates.append(resolve_project_path(source_path))
 
     candidates.append(KNOWLEDGE_FILES_DIR / document_id)
 
@@ -528,7 +537,7 @@ def delete_uploaded_source_file(document_id, metadata=None):
         return None
 
     source_path.unlink()
-    return str(source_path.relative_to(PROJECT_ROOT))
+    return source_path.relative_to(PROJECT_ROOT).as_posix()
 
 
 def safe_upload_name(filename):
@@ -595,5 +604,5 @@ def upload_and_index_file(upload_file, document_id=None, embedding_client=None, 
     if error:
         return None, error
 
-    relative_path = target.relative_to(PROJECT_ROOT)
+    relative_path = target.relative_to(PROJECT_ROOT).as_posix()
     return index_file(str(relative_path), document_id, embedding_client, notes=notes, category=category, tags=tags, metadata=metadata, use_original_name=True)

@@ -1,7 +1,15 @@
-# Agent Notes
+# Agent 说明
 
-## Encoding Checks
+## 产品目标
 
-- When checking for Chinese text corruption, first read the file explicitly as UTF-8.
-- Do not treat terminal or PowerShell display mojibake as source corruption by itself.
-- Only report text as corrupted when it still appears corrupted after a UTF-8 read of the file contents.
+- 该仓库将作为可公开展示的个人作品，默认按可开源、可复用、可演示的标准优化。
+- 优先服务中小企业 RAG 部署场景，重点关注安全基线、部署简洁性、运维可控性、成本可预测性和知识库效果稳定性。
+- 在配置、文档和示例中，优先使用跨平台、与个人机器无关的默认值，避免硬编码本机路径、私有域名或私有基础设施假设。
+- 做方案取舍时，优先选择易维护、易部署、易审计的实现，而不是只适合本地演示的一次性方案。
+- 涉及生产配置时，优先给出对中小企业友好的默认建议，例如 HTTPS、最小暴露面、强口令、同源部署优先、可观测性和备份恢复。
+
+## 编码检查
+
+- 检查中文乱码时，先显式按 UTF-8 读取文件内容。
+- 不要仅凭终端或 PowerShell 的乱码显示，就判断源文件本身已损坏。
+- 只有在按 UTF-8 读取文件内容后仍然显示乱码，才报告文本已损坏。

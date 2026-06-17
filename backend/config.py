@@ -12,8 +12,8 @@ PROJECT_ROOT = BACKEND_DIR.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 
-MODEL = "deepseek-v4-flash"
-BASE_URL = "https://api.deepseek.com"
+MODEL = os.environ.get("CHAT_MODEL", "").strip()
+BASE_URL = os.environ.get("CHAT_BASE_URL", "").strip()
 APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
 APP_USERNAME = os.environ.get("APP_USERNAME", "").strip()
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
@@ -164,6 +164,20 @@ def validate_runtime_config():
             "DEEPSEEK_API_KEY",
             "error",
             "DeepSeek API key is missing; chat model startup will fail.",
+        ))
+
+    if not MODEL:
+        issues.append(_config_issue(
+            "CHAT_MODEL",
+            "error",
+            "CHAT_MODEL is not configured.",
+        ))
+
+    if not BASE_URL:
+        issues.append(_config_issue(
+            "CHAT_BASE_URL",
+            "error",
+            "CHAT_BASE_URL is not configured.",
         ))
 
     if not APP_USERNAME:

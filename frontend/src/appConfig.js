@@ -1,6 +1,7 @@
 const viteEnv = import.meta.env || {};
 
-export const API_BASE = viteEnv.VITE_API_BASE || "http://localhost:8000";
+// In production behind nginx, prefer same-origin API calls unless overridden.
+export const API_BASE = viteEnv.VITE_API_BASE || (viteEnv.PROD ? "" : "http://localhost:8000");
 
 export const DEFAULT_RAG_EVAL_SUITES = [
   { id: "core", name: "Core Regression", question_count: 20 },

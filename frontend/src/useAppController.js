@@ -63,6 +63,7 @@ const {
   dailyTokenWarningThreshold,
 });
 const usageEventsTotalPages = computed(() => totalPages(modelUsageRecentEvents(modelUsagePeriod.value).length, pageSize));
+const shouldShowDeepseekBalance = computed(() => ragStatus.value?.model?.balance_supported === true);
 const pagedModelUsageEvents = computed(() => paginateItems(modelUsageRecentEvents(modelUsagePeriod.value), usageEventsPage.value, pageSize));
 const {
   loadKnowledgeDocuments,
@@ -207,10 +208,8 @@ const {
   pollKnowledgeIndexJob,
   pollKnowledgeIndexJobs,
   deleteKnowledgeDocument,
-  reindexAllKnowledgeDocuments,
   syncEnabledKnowledgeSources,
   clearMissingKnowledgeFiles,
-  deduplicateKnowledgeDocuments,
   searchKnowledge,
 } = useKnowledgeManagement({
   API_BASE,
@@ -311,11 +310,9 @@ const adminDataBindings = {
 
 const knowledgeBindings = {
   clearMissingKnowledgeFiles,
-  deduplicateKnowledgeDocuments,
   defaultKnowledgeMinScore,
   deleteKnowledgeDocument,
   onKnowledgeFileChange,
-  reindexAllKnowledgeDocuments,
   searchKnowledge,
   syncEnabledKnowledgeSources,
   uploadKnowledgeFile,
@@ -431,6 +428,7 @@ onBeforeUnmount(() => {
     shouldShowDailyTokenWarning,
     formatNumber,
     todayTokenTotal,
+    shouldShowDeepseekBalance,
     balanceError,
     deepseekBalance,
     formatDeepseekBalance,

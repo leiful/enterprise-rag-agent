@@ -1630,14 +1630,40 @@ button.conversation-item:not(:disabled):hover {
   margin: 0 0 14px;
 }
 
+.knowledge-tab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin: 16px 0 12px;
+}
+
 .knowledge-search-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: end;
-  margin: 8px 0 14px;
-  padding: 12px 12px 12px 0;
-  border-top: 1px solid #eef2f7;
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  max-width: 560px;
+  background: #f8fafc;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.knowledge-search-form label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.knowledge-search-form input {
+  width: 100%;
 }
 
 .knowledge-search-form label {
@@ -1713,6 +1739,20 @@ button.conversation-item:not(:disabled):hover {
   border-color: #bfdbfe;
 }
 
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.message-time {
+  flex-shrink: 0;
+  color: #888;
+  font-size: 12px;
+}
+
 .message-skeleton-list {
   display: grid;
   gap: 14px;
@@ -1775,6 +1815,10 @@ button.conversation-item:not(:disabled):hover {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.message-header .role {
+  margin-bottom: 0;
 }
 
 pre {

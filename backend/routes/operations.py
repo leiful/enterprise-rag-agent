@@ -8,6 +8,7 @@ import secrets
 import sys
 import time
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
@@ -73,6 +74,19 @@ import rag_eval as rag_eval_script
 
 router = APIRouter()
 logger = get_logger("backend.operations")
+
+
+def current_chat_provider():
+    host = urlparse(BASE_URL).netloc.lower()
+    if "deepseek" in host:
+        return "deepseek"
+    return "custom"
+
+
+def deepseek_balance_supported():
+    return current_chat_provider() == "deepseek"
+
+
 @router.get("/admin/rag/status", dependencies=[Depends(require_admin)])
 def admin_rag_status():
     return get_rag_operational_status()
@@ -460,6 +474,10 @@ def get_rag_operational_status():
             "today": model_usage_today,
             "last_7_days": model_usage_week,
         },
+        "model": {
+            "provider": current_chat_provider(),
+            "balance_supported": deepseek_balance_supported(),
+        },
         "parsing": {
             "supported_extensions": sorted(knowledge.ALLOWED_KNOWLEDGE_EXTENSIONS),
             "ocr_available": document_ocr_available(),
@@ -474,6 +492,12 @@ def get_rag_operational_status():
 
 
 def get_deepseek_balance():
+    if not deepseek_balance_supported():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DeepSeek balance is only available when the chat provider is DeepSeek.",
+        )
+
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(
@@ -752,67 +776,6 @@ def delete_knowledge_document(document_id: str, user=Depends(require_admin)):
     return result
 
 
-@router.post("/knowledge/reindex", dependencies=[Depends(require_admin)])
-def reindex_all_knowledge_documents(background_tasks: BackgroundTasks, user=Depends(require_admin)):
-    queued_jobs = []
-    skipped_documents = []
-
-    for doc in vector_store.list_documents():
-        doc_info = {"document_id": doc} if isinstance(doc, str) else doc
-        document_id = doc_info.get("document_id")
-        if not document_id:
-            continue
-
-        metadata = vector_store.get_document_metadata(document_id) or {}
-        source_path = knowledge.source_path_from_metadata(document_id, metadata)
-        if source_path is None:
-            skipped_documents.append(document_id)
-            continue
-
-        try:
-            relative_path = str(source_path.relative_to(knowledge.PROJECT_ROOT))
-        except ValueError:
-            relative_path = str(source_path)
-        job_id = enqueue_index_job(
-            background_tasks,
-            path=relative_path,
-            document_id=document_id,
-            notes=metadata.get("user_notes"),
-            category=metadata.get("category"),
-            tags=metadata.get("tags") if isinstance(metadata.get("tags"), list) else None,
-            use_original_name=True,
-            metadata=metadata,
-            force_reindex=True,
-        )
-        queued_jobs.append({
-            "job_id": job_id,
-            "document_id": document_id,
-            "path": relative_path,
-        })
-
-    content = {
-        "queued_count": len(queued_jobs),
-        "skipped_count": len(skipped_documents),
-        "jobs": queued_jobs,
-        "skipped_documents": skipped_documents,
-    }
-    add_admin_audit_event(
-        user,
-        "knowledge.reindex_all",
-        "knowledge_collection",
-        details={
-            "queued_count": content["queued_count"],
-            "skipped_count": content["skipped_count"],
-            "document_ids": [job["document_id"] for job in queued_jobs],
-            "skipped_documents": skipped_documents,
-        },
-    )
-    return JSONResponse(
-        status_code=status.HTTP_202_ACCEPTED,
-        content=content,
-    )
-
-
 @router.get("/knowledge/sources", dependencies=[Depends(require_admin)])
 def list_knowledge_sources():
     return {"sources": knowledge_sources.list_sources()}
@@ -858,24 +821,6 @@ def clear_missing_knowledge_source_files(user=Depends(require_admin)):
         details={"deleted_count": deleted_count},
     )
     return {"deleted_count": deleted_count}
-
-
-@router.post("/knowledge/documents/deduplicate", dependencies=[Depends(require_admin)])
-def deduplicate_knowledge_documents(user=Depends(require_admin)):
-    result = vector_store.deduplicate_documents_by_content_hash(
-        reassign_document=reassign_knowledge_source_files,
-    )
-    add_admin_audit_event(
-        user,
-        "knowledge.deduplicate",
-        "knowledge_document",
-        details={
-            "duplicate_group_count": result["duplicate_group_count"],
-            "removed_count": result["removed_count"],
-            "removed_documents": result["removed_documents"],
-        },
-    )
-    return result
 
 
 @router.post("/knowledge/search")

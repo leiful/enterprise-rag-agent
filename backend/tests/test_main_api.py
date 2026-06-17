@@ -1,3 +1,5 @@
+import base64
+import json
 import warnings
 import unittest
 from tempfile import TemporaryDirectory
@@ -408,6 +410,10 @@ class ApiAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.text, "hello there")
         self.assertTrue(response.headers["X-Knowledge-Sources"])
+        encoded_sources = response.headers["X-Knowledge-Sources"]
+        decoded_sources = json.loads(base64.b64decode(encoded_sources).decode("utf-8"))
+        self.assertEqual(decoded_sources[0]["document_id"], "stream.md")
+        self.assertEqual(decoded_sources[0]["text"], "stream source")
 
         conversation_id = int(response.headers["X-Conversation-Id"])
         messages = database.list_messages(self.default_user_id(), conversation_id)
@@ -530,11 +536,22 @@ class ApiAuthTests(unittest.TestCase):
         request = urlopen_mock.call_args.args[0]
         self.assertEqual(request.headers["Authorization"], "Bearer test-key")
 
+    def test_deepseek_balance_returns_unavailable_for_non_deepseek_provider(self):
+        with patch.object(operations_routes, "BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"):
+            with patch.object(operations_routes, "urlopen") as urlopen_mock:
+                with TestClient(main.app) as client:
+                    client.post("/login", json={"username": "admin", "password": "password"})
+                    response = client.get("/billing/deepseek-balance")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("only available", response.json()["detail"])
+        urlopen_mock.assert_not_called()
+
     def test_index_knowledge_file_requires_login(self):
         with TestClient(main.app) as client:
             response = client.post(
                 "/knowledge/index-file",
-                json={"path": "ENGINEERING_NOTES.md"},
+                json={"path": "README.md"},
             )
 
         self.assertEqual(response.status_code, 401)

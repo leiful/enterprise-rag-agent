@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Architecture Placeholder</title>
+  <desc id="desc">Placeholder image for the system architecture diagram.</desc>
+  <rect width="1200" height="620" fill="#f8fafc"/>
+  <rect x="70" y="220" width="200" height="140" rx="20" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+  <rect x="360" y="160" width="220" height="260" rx="20" fill="#ede9fe" stroke="#c4b5fd" stroke-width="2"/>
+  <rect x="690" y="80" width="190" height="110" rx="20" fill="#dcfce7" stroke="#86efac" stroke-width="2"/>
+  <rect x="690" y="235" width="190" height="110" rx="20" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/>
+  <rect x="690" y="390" width="190" height="110" rx="20" fill="#fee2e2" stroke="#fca5a5" stroke-width="2"/>
+  <rect x="970" y="220" width="160" height="140" rx="20" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="2"/>
+  <line x1="270" y1="290" x2="360" y2="290" stroke="#64748b" stroke-width="4"/>
+  <line x1="580" y1="290" x2="690" y2="135" stroke="#64748b" stroke-width="4"/>
+  <line x1="580" y1="290" x2="690" y2="290" stroke="#64748b" stroke-width="4"/>
+  <line x1="580" y1="290" x2="690" y2="445" stroke="#64748b" stroke-width="4"/>
+  <line x1="880" y1="290" x2="970" y2="290" stroke="#64748b" stroke-width="4"/>
+  <text x="170" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#1e293b">Frontend</text>
+  <text x="470" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#1e293b">Backend</text>
+  <text x="470" y="320" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#475569">API, auth, RAG orchestration</text>
+  <text x="785" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#1e293b">PostgreSQL</text>
+  <text x="785" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#1e293b">Chroma</text>
+  <text x="785" y="455" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#1e293b">Model APIs</text>
+  <text x="1050" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#1e293b">Knowledge</text>
+  <text x="600" y="560" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#64748b">Replace with a final architecture diagram when screenshots and branding are ready</text>
+</svg>

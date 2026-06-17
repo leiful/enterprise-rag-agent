@@ -49,7 +49,23 @@ def build_agent_messages(saved_messages):
 
 
 def encode_sources_header(sources):
-    sources_json = json.dumps(sources or [], ensure_ascii=False)
+    compact_sources = []
+    for source in sources or []:
+        metadata = source.get("metadata") if isinstance(source, dict) else {}
+        compact_sources.append(
+            {
+                "label": source.get("label"),
+                "document_id": source.get("document_id"),
+                "chunk_id": source.get("chunk_id"),
+                "chunk_index": source.get("chunk_index"),
+                "score": source.get("score"),
+                "text": (source.get("text") or "")[:280],
+                "page_start": source.get("page_start"),
+                "page_end": source.get("page_end"),
+                "department": (metadata or {}).get("department"),
+            }
+        )
+    sources_json = json.dumps(compact_sources, ensure_ascii=False, separators=(",", ":"))
     return base64.b64encode(sources_json.encode("utf-8")).decode("ascii")
 
 

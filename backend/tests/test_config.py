@@ -5,6 +5,16 @@ import config
 
 
 class ConfigValidationTests(unittest.TestCase):
+    def setUp(self):
+        self.model_patcher = patch.object(config, "MODEL", "test-chat-model")
+        self.base_url_patcher = patch.object(config, "BASE_URL", "https://api.example.com")
+        self.model_patcher.start()
+        self.base_url_patcher.start()
+
+    def tearDown(self):
+        self.base_url_patcher.stop()
+        self.model_patcher.stop()
+
     def test_validate_runtime_config_reports_invalid_vector_backend(self):
         with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "model-key"}):
             with patch.object(config, "APP_USERNAME", "admin"):
@@ -113,6 +123,20 @@ class ConfigValidationTests(unittest.TestCase):
                                 issues = config.validate_runtime_config()
 
         self.assertIn("QUERY_COVERAGE_MIN", {issue["name"] for issue in issues})
+
+    def test_validate_runtime_config_requires_chat_model_and_base_url(self):
+        with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "model-key"}):
+            with patch.object(config, "MODEL", ""):
+                with patch.object(config, "BASE_URL", ""):
+                    with patch.object(config, "APP_USERNAME", "admin"):
+                        with patch.object(config, "APP_PASSWORD", "strong-local-password"):
+                            with patch.object(config, "DATABASE_URL", "postgresql://user:pass@localhost:5432/app"):
+                                with patch.object(config, "VECTOR_STORE_BACKEND", "chroma"):
+                                    issues = config.validate_runtime_config()
+
+        issue_names = {issue["name"] for issue in issues if issue["severity"] == "error"}
+        self.assertIn("CHAT_MODEL", issue_names)
+        self.assertIn("CHAT_BASE_URL", issue_names)
 
 
 if __name__ == "__main__":

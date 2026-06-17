@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Knowledge Management Placeholder</title>
+  <desc id="desc">Placeholder image for the knowledge management screenshot.</desc>
+  <rect width="1200" height="700" fill="#f8fafc"/>
+  <rect x="40" y="40" width="1120" height="620" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="72" y="96" width="260" height="532" rx="14" fill="#f1f5f9"/>
+  <rect x="364" y="96" width="724" height="84" rx="14" fill="#dcfce7"/>
+  <rect x="364" y="204" width="724" height="110" rx="14" fill="#f8fafc" stroke="#bbf7d0" stroke-width="2"/>
+  <rect x="364" y="338" width="724" height="110" rx="14" fill="#f8fafc" stroke="#bbf7d0" stroke-width="2"/>
+  <rect x="364" y="472" width="724" height="110" rx="14" fill="#f8fafc" stroke="#bbf7d0" stroke-width="2"/>
+  <text x="726" y="336" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" fill="#334155">Replace with Knowledge Management Screenshot</text>
+  <text x="726" y="384" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#64748b">Recommended: source sync, indexing status, and document list</text>
+</svg>

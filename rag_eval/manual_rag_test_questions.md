@@ -1,70 +1,70 @@
-# Manual RAG Test Questions
+# 手工 RAG 测试题
 
-This suite is designed for the three uploaded PDFs:
+这套测试题适用于当前已上传的 3 份 PDF：
 
 - `employee_handbook_City_of_Beaverton_2025.pdf`
 - `drug_label_Cosentyx_prescribing_information.pdf`
 - `microwave_manual_Midea_XM044KYYGE.pdf`
 
-Use each question in chat. Score both retrieval and answer quality.
+请把每个问题都拿到聊天中测试，同时对检索质量和回答质量进行评分。
 
-## Scoring
+## 评分标准
 
-- 2 = Correct answer, grounded in the right document, with usable citation/source.
-- 1 = Partly correct, but missing a key condition, weak citation, or retrieved noisy evidence.
-- 0 = Wrong answer, hallucination, wrong document, or no answer when the document contains the answer.
+- 2 = 回答正确，依据的文档也正确，并且给出了可用的引用或来源。
+- 1 = 回答部分正确，但缺少关键条件、引用较弱，或检索出的证据噪声较多。
+- 0 = 回答错误、出现幻觉、引用了错误文档，或文档里明明有答案却没有答出来。
 
-For no-answer questions:
+对于“应当拒答”的问题：
 
-- 2 = Clearly says the uploaded documents do not contain enough evidence.
-- 1 = Mostly refuses but adds unsupported speculation.
-- 0 = Invents an answer.
+- 2 = 明确说明已上传文档中没有足够证据。
+- 1 = 基本拒答了，但夹带了没有依据的猜测。
+- 0 = 凭空编造答案。
 
-## Questions
+## 题目
 
-| ID | Type | Question | Expected answer points | Expected source |
+| ID | 类型 | 问题 | 预期回答要点 | 预期来源 |
 |---|---|---|---|---|
-| E01 | Direct fact | According to the City of Beaverton employee handbook, when is a non-exempt employee required to take a meal period? | At least a 30-minute unpaid meal period is required when the work period is six hours or greater; no meal period is required if the work period is less than six hours. | Employee handbook, section 3.9, page 17 |
-| E02 | Direct fact | What rest break does the handbook require for non-exempt employees for each four-hour work segment? | A paid, uninterrupted 15-minute rest break for every four-hour segment or major portion thereof, typically in the middle of the segment. | Employee handbook, section 3.9, page 17 |
-| E03 | Detail condition | Can meal periods and rest breaks be combined or skipped so an employee can arrive late or leave early? | No. Meal periods and rest breaks may not be taken together, at the start/end of the workday, or skipped to start late or leave early. | Employee handbook, section 3.9, page 17 |
-| E04 | Detail condition | Under the handbook, can non-exempt employees work overtime without supervisor authorization? | No. Overtime must be specifically authorized by a supervisor or manager, preferably in writing, except in an emergency; unauthorized overtime may lead to discipline. | Employee handbook, section 3.11.2, page 18 |
-| E05 | Detail fact | What is the maximum amount of compensatory time that can be banked? | Up to 100 hours. | Employee handbook, section 3.11.3, page 18 |
-| E06 | Detail condition | For overtime calculations, do paid hours not actually worked count toward the 40-hour work week? | Yes, examples include sick, vacation, PTO, holidays, and family leave, unless a collective bargaining agreement says otherwise. | Employee handbook, section 3.11.1, page 18 |
-| E07 | Policy hierarchy | If a collective bargaining agreement contradicts the employee handbook, which controls? | The collective bargaining agreement provision controls. | Employee handbook, welcome/introduction, page ii |
-| E08 | Remote work | Does being approved for a flexible work schedule automatically make an employee eligible for remote work? | No. Some classifications may not be eligible for remote work even if approved for a flexible schedule. | Employee handbook, section 3.8, page 17 |
-| E09 | Lactation break | For what child age does the city provide reasonable rest periods for expression of breast milk? | For an employee's child who is 18 months old or younger. | Employee handbook, section 3.10, page 17 |
-| E10 | Benefits/probation | Are probationary employees generally entitled to educational assistance? | Generally no; probationary employees are generally not entitled to educational assistance. | Employee handbook, section 3.6, page 15 |
-| D01 | Direct fact | What is COSENTYX indicated to treat in plaque psoriasis patients? | Moderate to severe plaque psoriasis in adults and pediatric patients 6 years and older who are candidates for systemic therapy or phototherapy. | COSENTYX label, section 1.1, page 4 |
-| D02 | Direct fact | What are the most common adverse reactions listed for COSENTYX? | Nasopharyngitis, diarrhea, and upper respiratory tract infection. | COSENTYX label highlights, page 2 |
-| D03 | Safety warning | What should be done if a serious infection develops during COSENTYX treatment? | Discontinue COSENTYX until the infection resolves. | COSENTYX label warnings, page 1 |
-| D04 | Pre-treatment check | What should be evaluated before initiating COSENTYX treatment? | Evaluate patients for tuberculosis; also complete age-appropriate vaccinations before initiation. | COSENTYX label highlights/section 2.1, page 1 |
-| D05 | Immunization warning | What does the label say about live vaccines for patients treated with COSENTYX? | Avoid use of live vaccines in patients treated with COSENTYX. | COSENTYX label warnings, page 1 |
-| D06 | Contraindication | What is the listed contraindication for COSENTYX? | Serious hypersensitivity to secukinumab or any excipients in COSENTYX. | COSENTYX label highlights, page 1 |
-| D07 | Dosing detail | What is the adult plaque psoriasis subcutaneous dosage schedule for COSENTYX? | 300 mg by subcutaneous injection at Weeks 0, 1, 2, 3, and 4, then every 4 weeks thereafter; each 300 mg dose can be one 300 mg injection or two 150 mg injections. | COSENTYX label, section 2.3, page 5 |
-| D08 | Pediatric dosing | For pediatric plaque psoriasis patients 6 years and older, what dose is recommended below 50 kg and at or above 50 kg? | Below 50 kg: 75 mg. At or above 50 kg: 150 mg. | COSENTYX label, section 2.3, page 5 |
-| D09 | Route limitation | For which adult conditions may COSENTYX intravenous infusion be administered? | Only adults with PsA, AS, and nr-axSpA. | COSENTYX label, section 2.2/2.12, page 5 |
-| D10 | Crohn distractor | Is COSENTYX approved for treatment of Crohn's disease? | No. The label says COSENTYX is not approved for Crohn's disease. | COSENTYX label, IBD warning, page 9 |
-| M01 | Electrical requirement | What electrical supply does the microwave manual require? | 120 volt, 60 Hz, AC only, 15 amp or more protected electrical supply; separate circuit serving only the microwave is recommended. | Microwave manual, electrical requirements, page 4 |
-| M02 | Safety rule | Does the microwave manual allow using an extension cord? | No. It says do not use an extension cord. If the cord is too short, have a qualified electrician or serviceman install an outlet nearby. | Microwave manual, page 4 |
-| M03 | Grounding safety | What does the manual say about the grounding pin? | Do not cut or remove the grounding pin under any circumstances. | Microwave manual, page 4 |
-| M04 | Turntable rule | Can the microwave be used without the turntable and support? | No. The manual says never use the microwave without the turntable and support. | Microwave manual, page 6 |
-| M05 | Child lock | How do you turn the microwave control lock on or off? | Touch and hold the Stop/Cancel pad for more than 3 seconds. The lock icon appears with 2 beeps when turned on and disappears when turned off. | Microwave manual, manual cooking/control lock, page 9 |
-| M06 | Ready Set | How can you quickly heat for 1, 2, or 3 minutes at 100% power? | Touch number pad 1, 2, or 3 for the desired minutes of cook time. | Microwave manual, Ready Set, page 9 |
-| M07 | Service check | Before calling service, what water test does the manual suggest? | Place one cup of water in a glass measuring cup, close the door, and operate for one minute at HIGH 100%; check light, display, turntable, and whether water is warm. | Microwave manual, Service Call Check, page 21 |
-| M08 | Output power | What is the microwave output power listed in the specifications? | 900 W. | Microwave manual, Specifications, page 21 |
-| M09 | Popcorn safety | Does the manual allow popping popcorn in regular brown bags or glass bowls? | No. It says not to pop popcorn in regular brown bags or glass bowls; use specially bagged microwave popcorn. | Microwave manual, food safety table, page 6 |
-| X01 | Cross-document routing | Which uploaded document should answer a question about live vaccines, and what is the answer? | COSENTYX drug label; avoid live vaccines in patients treated with COSENTYX. | COSENTYX label |
-| X02 | Cross-document routing | Which uploaded document should answer a question about using an extension cord, and what is the answer? | Microwave manual; do not use an extension cord. | Microwave manual |
-| X03 | Cross-document routing | Which uploaded document should answer a question about remote work eligibility, and what is the answer? | Employee handbook; flexible schedule approval does not automatically mean remote work eligibility. | Employee handbook |
-| X04 | Cross-document comparison | Compare how the employee handbook and microwave manual handle unauthorized actions: unauthorized overtime vs. DIY microwave service. | Handbook: unauthorized overtime may lead to discipline; microwave manual: the oven should never be serviced by a do-it-yourself repair person and should be serviced by qualified personnel. | Employee handbook and microwave manual |
-| N01 | No-answer/refusal | According to the uploaded documents, what is the recommended COSENTYX dose for treating Crohn's disease? | Should refuse: the documents say COSENTYX is not approved for Crohn's disease, so no recommended dose is provided. | COSENTYX label |
-| N02 | No-answer/refusal | According to the uploaded documents, what is the City of Beaverton's 2026 remote work policy? | Should refuse: the uploaded handbook is effective April 2025 and points to the Remote Work Policy/HR for more information; it does not provide a 2026 remote work policy. | Employee handbook |
-| N03 | No-answer/refusal | According to the uploaded documents, what is the microwave's Wi-Fi pairing procedure? | Should refuse: the microwave manual does not contain Wi-Fi pairing instructions. | Microwave manual |
-| N04 | No-answer/refusal | Based only on the uploaded documents, what is the exact cost of COSENTYX per dose? | Should refuse: the drug label does not provide pricing. | COSENTYX label |
+| E01 | 直接事实 | 根据 City of Beaverton 员工手册，非豁免员工在什么情况下必须安排用餐时间？ | 当工作时长达到或超过 6 小时时，必须安排至少 30 分钟的无薪用餐时间；如果工作时长少于 6 小时，则不要求用餐时间。 | 员工手册，第 3.9 节，第 17 页 |
+| E02 | 直接事实 | 手册要求非豁免员工每连续工作 4 小时应享受什么样的休息时间？ | 每工作 4 小时或其主要部分，应安排一次带薪、不中断的 15 分钟休息，通常安排在该时间段中间。 | 员工手册，第 3.9 节，第 17 页 |
+| E03 | 细节条件 | 用餐时间和休息时间是否可以合并，或跳过以便员工晚到或早退？ | 不可以。用餐时间和休息时间不能合并，不能安排在工作日开始或结束时，也不能通过跳过来实现晚到或早退。 | 员工手册，第 3.9 节，第 17 页 |
+| E04 | 细节条件 | 按照手册规定，非豁免员工是否可以在未获主管授权的情况下加班？ | 不可以。加班必须由主管或经理明确批准，最好以书面形式，紧急情况除外；未经授权的加班可能会导致纪律处分。 | 员工手册，第 3.11.2 节，第 18 页 |
+| E05 | 细节事实 | 补休时数最多可以累计多少？ | 最多 100 小时。 | 员工手册，第 3.11.3 节，第 18 页 |
+| E06 | 细节条件 | 在计算加班时，那些并未实际工作的带薪时数是否计入 40 小时工作周？ | 计入，例如病假、年假、PTO、节假日和家庭假等，除非集体谈判协议另有规定。 | 员工手册，第 3.11.1 节，第 18 页 |
+| E07 | 政策优先级 | 如果集体谈判协议与员工手册冲突，以哪个为准？ | 以集体谈判协议中的条款为准。 | 员工手册，欢迎/导言部分，第 ii 页 |
+| E08 | 远程办公 | 员工获批弹性工作制后，是否自动具备远程办公资格？ | 不是。即使获批弹性工作制，某些岗位类别仍可能不具备远程办公资格。 | 员工手册，第 3.8 节，第 17 页 |
+| E09 | 哺乳休息 | 城市规定会为多大年龄以内的孩子提供挤母乳的合理休息时间？ | 适用于员工 18 个月及以下的子女。 | 员工手册，第 3.10 节，第 17 页 |
+| E10 | 福利/试用期 | 试用期员工通常是否享有教育补助？ | 通常不享有；试用期员工一般无权获得教育补助。 | 员工手册，第 3.6 节，第 15 页 |
+| D01 | 直接事实 | COSENTYX 被批准用于治疗斑块状银屑病患者的哪些情况？ | 用于需要系统治疗或光疗的中重度斑块状银屑病成人患者，以及 6 岁及以上儿童患者。 | COSENTYX 说明书，第 1.1 节，第 4 页 |
+| D02 | 直接事实 | COSENTYX 列出的最常见不良反应有哪些？ | 鼻咽炎、腹泻和上呼吸道感染。 | COSENTYX 说明书摘要，第 2 页 |
+| D03 | 安全警告 | 如果在 COSENTYX 治疗期间发生严重感染，应该怎么处理？ | 应停止使用 COSENTYX，直到感染消退。 | COSENTYX 说明书警告部分，第 1 页 |
+| D04 | 用药前检查 | 在开始使用 COSENTYX 前，应评估什么？ | 应评估患者是否患有结核病；同时在开始治疗前完成符合年龄要求的疫苗接种。 | COSENTYX 说明书摘要/第 2.1 节，第 1 页 |
+| D05 | 疫苗警告 | 说明书如何描述 COSENTYX 患者接种活疫苗的问题？ | 应避免给使用 COSENTYX 的患者接种活疫苗。 | COSENTYX 说明书警告部分，第 1 页 |
+| D06 | 禁忌症 | COSENTYX 列出的禁忌症是什么？ | 对司库奇尤单抗或 COSENTYX 任一辅料存在严重超敏反应。 | COSENTYX 说明书摘要，第 1 页 |
+| D07 | 剂量细节 | COSENTYX 用于成人斑块状银屑病时，皮下注射的给药方案是什么？ | 在第 0、1、2、3、4 周各进行一次 300 mg 皮下注射，此后每 4 周一次；每次 300 mg 可为 1 支 300 mg 注射，或 2 支 150 mg 注射。 | COSENTYX 说明书，第 2.3 节，第 5 页 |
+| D08 | 儿童剂量 | 对于 6 岁及以上儿童斑块状银屑病患者，体重低于 50 kg 和达到或超过 50 kg 时的推荐剂量分别是什么？ | 低于 50 kg：75 mg；达到或超过 50 kg：150 mg。 | COSENTYX 说明书，第 2.3 节，第 5 页 |
+| D09 | 给药途径限制 | COSENTYX 的静脉输注仅可用于哪些成人适应症？ | 仅适用于患有 PsA、AS 和 nr-axSpA 的成人。 | COSENTYX 说明书，第 2.2/2.12 节，第 5 页 |
+| D10 | 克罗恩病干扰项 | COSENTYX 是否获批用于治疗克罗恩病？ | 没有。说明书明确写明 COSENTYX 未获批用于治疗克罗恩病。 | COSENTYX 说明书，IBD 警告部分，第 9 页 |
+| M01 | 供电要求 | 微波炉说明书要求的电源条件是什么？ | 120 伏、60 Hz、仅交流电、15 安或更高并带保护的电源；建议使用仅供微波炉使用的独立电路。 | 微波炉说明书，电气要求，第 4 页 |
+| M02 | 安全规则 | 微波炉说明书是否允许使用延长线？ | 不允许。说明书写明不要使用延长线；如果电源线过短，应由合格电工或维修人员在附近安装插座。 | 微波炉说明书，第 4 页 |
+| M03 | 接地安全 | 说明书对接地插脚有什么要求？ | 在任何情况下都不要剪掉或移除接地插脚。 | 微波炉说明书，第 4 页 |
+| M04 | 转盘规则 | 微波炉可以在没有转盘和支架的情况下使用吗？ | 不可以。说明书明确写明绝不能在没有转盘和支架的情况下使用微波炉。 | 微波炉说明书，第 6 页 |
+| M05 | 儿童锁 | 如何开启或关闭微波炉控制锁？ | 按住 `Stop/Cancel` 键超过 3 秒。开启时会鸣叫 2 声并显示锁定图标，关闭时图标消失。 | 微波炉说明书，手动烹饪/控制锁，第 9 页 |
+| M06 | Ready Set | 如何快速以 100% 功率加热 1、2 或 3 分钟？ | 直接按数字键 `1`、`2` 或 `3`，即可按对应分钟数开始加热。 | 微波炉说明书，Ready Set，第 9 页 |
+| M07 | 送修前检查 | 在联系维修前，说明书建议做什么“热水测试”？ | 将一杯水放入玻璃量杯中，关门后以 HIGH 100% 运行 1 分钟；检查灯、显示屏、转盘是否正常，以及水是否变热。 | 微波炉说明书，Service Call Check，第 21 页 |
+| M08 | 输出功率 | 规格中列出的微波炉输出功率是多少？ | 900 W。 | 微波炉说明书，Specifications，第 21 页 |
+| M09 | 爆米花安全 | 说明书是否允许用普通牛皮纸袋或玻璃碗爆米花？ | 不允许。说明书写明不要使用普通牛皮纸袋或玻璃碗爆米花，应使用专门包装的微波爆米花。 | 微波炉说明书，食品安全表，第 6 页 |
+| X01 | 跨文档路由 | 关于活疫苗的问题，应该由哪份已上传文档回答？正确答案是什么？ | 应由 COSENTYX 药品说明书回答；答案是应避免给使用 COSENTYX 的患者接种活疫苗。 | COSENTYX 说明书 |
+| X02 | 跨文档路由 | 关于能否使用延长线的问题，应该由哪份已上传文档回答？正确答案是什么？ | 应由微波炉说明书回答；答案是不要使用延长线。 | 微波炉说明书 |
+| X03 | 跨文档路由 | 关于远程办公资格的问题，应该由哪份已上传文档回答？正确答案是什么？ | 应由员工手册回答；答案是获批弹性工作制并不自动意味着具备远程办公资格。 | 员工手册 |
+| X04 | 跨文档比较 | 比较员工手册和微波炉说明书对“未经授权行为”的处理：未经授权加班与自行维修微波炉。 | 员工手册：未经授权的加班可能导致纪律处分；微波炉说明书：微波炉绝不能由用户自行维修，应由合格人员维修。 | 员工手册和微波炉说明书 |
+| N01 | 无答案/拒答 | 根据已上传文档，治疗克罗恩病时 COSENTYX 的推荐剂量是多少？ | 应拒答：文档明确写明 COSENTYX 未获批用于治疗克罗恩病，因此没有推荐剂量。 | COSENTYX 说明书 |
+| N02 | 无答案/拒答 | 根据已上传文档，City of Beaverton 在 2026 年的远程办公政策是什么？ | 应拒答：已上传员工手册自 2025 年 4 月生效，并提示参考远程办公政策/HR 获取更多信息；文档并未提供 2026 年远程办公政策。 | 员工手册 |
+| N03 | 无答案/拒答 | 根据已上传文档，这台微波炉的 Wi-Fi 配对流程是什么？ | 应拒答：微波炉说明书中没有 Wi-Fi 配对说明。 | 微波炉说明书 |
+| N04 | 无答案/拒答 | 仅基于已上传文档，COSENTYX 每剂的准确价格是多少？ | 应拒答：药品说明书不包含价格信息。 | COSENTYX 说明书 |
 
-## Suggested Test Runs
+## 建议测试方式
 
-1. Run all questions with normal chat settings and ask the model to cite sources.
-2. For each question, record: answer score, source score, top retrieved document, and whether the answer abstained when needed.
-3. Pay special attention to cross-document questions. They reveal whether retrieval routes to the right PDF or mixes unrelated chunks.
-4. After this baseline, repeat the same questions after changing chunk size or semantic chunking settings.
+1. 使用正常聊天设置运行全部题目，并要求模型给出来源引用。
+2. 对每道题记录：回答得分、来源得分、最高命中文档，以及在需要拒答时是否正确拒答。
+3. 重点关注跨文档题目，它们能反映检索是否路由到了正确 PDF，还是混入了无关分块。
+4. 在得到这轮基线结果后，可在调整分块大小或语义分块设置后，再重复测试同样的问题。

@@ -214,41 +214,6 @@ export function useKnowledgeManagement({
     }
   }
 
-  async function reindexAllKnowledgeDocuments() {
-    if (knowledgeLoading.value) {
-      return;
-    }
-
-    knowledgeLoading.value = true;
-    knowledgeError.value = "";
-    knowledgeIndexJob.value = null;
-
-    try {
-      const response = await fetchImpl(`${API_BASE}/knowledge/reindex`, {
-        method: "POST",
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await responseError(response, `Batch reindex failed with status ${response.status}`),
-        );
-      }
-
-      const data = await response.json();
-      knowledgeIndexJob.value = {
-        status: "queued",
-        document_id: `${data.queued_count} documents queued, ${data.skipped_count} skipped`,
-      };
-      await loadKnowledgeDocuments();
-      await loadRagStatus();
-    } catch (err) {
-      knowledgeError.value = err.message || "Batch reindex failed";
-    } finally {
-      knowledgeLoading.value = false;
-    }
-  }
-
   async function syncKnowledgeSource(sourceId) {
     const response = await fetchImpl(`${API_BASE}/knowledge/sources/${sourceId}/sync`, {
       method: "POST",
@@ -361,7 +326,7 @@ export function useKnowledgeManagement({
       await loadKnowledgeDocuments();
       await loadRagStatus();
     } catch (err) {
-      knowledgeError.value = err.message || "Deduplicate failed";
+      knowledgeError.value = err.message || "Search failed";
     } finally {
       knowledgeLoading.value = false;
     }
@@ -418,11 +383,9 @@ export function useKnowledgeManagement({
     pollKnowledgeIndexJob,
     pollKnowledgeIndexJobs,
     deleteKnowledgeDocument,
-    reindexAllKnowledgeDocuments,
     syncKnowledgeSource,
     syncEnabledKnowledgeSources,
     clearMissingKnowledgeFiles,
-    deduplicateKnowledgeDocuments,
     searchKnowledge,
   };
 }

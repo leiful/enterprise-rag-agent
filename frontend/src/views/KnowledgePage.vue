@@ -1,5 +1,7 @@
 <script setup>
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { PAGE_SIZE } from "../appConfig.js";
+import { paginateItems, totalPages } from "../pagination.js";
 import KnowledgeEvaluationPanel from "./KnowledgeEvaluationPanel.vue";
 
 const props = defineProps({
@@ -28,9 +30,7 @@ const props = defineProps({
   ragEvalLoading: { type: Boolean, required: true },
   ragEvalError: { type: String, default: "" },
   ragEval: { type: Object, default: null },
-  reindexAllKnowledgeDocuments: { type: Function, required: true },
   syncEnabledKnowledgeSources: { type: Function, required: true },
-  deduplicateKnowledgeDocuments: { type: Function, required: true },
   clearMissingKnowledgeFiles: { type: Function, required: true },
   formatStatusCount: { type: Function, required: true },
   ragStatusClass: { type: Function, required: true },
@@ -89,6 +89,35 @@ watch(
     }
   },
 );
+
+const documentPage = ref(1);
+const documentSearch = ref("");
+const documentDepartment = ref("");
+
+const filteredKnowledgeDocuments = computed(() => {
+  const search = documentSearch.value.trim().toLowerCase();
+  const department = documentDepartment.value;
+  if (!search && !department) {
+    return props.knowledgeDocuments;
+  }
+
+  return props.knowledgeDocuments.filter((document) => {
+    const name = (document.file_name || document.document_id || "").toLowerCase();
+    const path = (document.source_path || "").toLowerCase();
+    const dept = (document.department || "").toLowerCase();
+    const searchMatch =
+      !search || name.includes(search) || path.includes(search) || dept.includes(search);
+    const departmentMatch = !department || dept === department.toLowerCase();
+    return searchMatch && departmentMatch;
+  });
+});
+
+const totalDocumentPages = computed(() => totalPages(filteredKnowledgeDocuments.value.length, PAGE_SIZE));
+const pagedKnowledgeDocuments = computed(() => paginateItems(filteredKnowledgeDocuments.value, documentPage.value, PAGE_SIZE));
+
+watch([documentSearch, documentDepartment, () => props.knowledgeDocuments], () => {
+  documentPage.value = 1;
+});
 </script>
 
 <template>
@@ -103,26 +132,10 @@ watch(
           <button
             class="secondary-button"
             type="button"
-            :disabled="knowledgeLoading || knowledgeDocuments.length === 0"
-            @click="reindexAllKnowledgeDocuments"
-          >
-            Reindex all
-          </button>
-          <button
-            class="secondary-button"
-            type="button"
             :disabled="knowledgeLoading || !hasEnabledKnowledgeSources"
             @click="syncEnabledKnowledgeSources"
           >
             Sync now
-          </button>
-          <button
-            class="secondary-button"
-            type="button"
-            :disabled="knowledgeLoading || knowledgeDocuments.length < 2"
-            @click="deduplicateKnowledgeDocuments"
-          >
-            Deduplicate
           </button>
           <button
             v-if="formatStatusCount(ragStatus?.sources?.file_status_counts, 'missing') > 0"
@@ -170,14 +183,6 @@ watch(
           <div>
             <strong>{{ ragStatus.audit?.event_count || 0 }}</strong>
             <span>audit events</span>
-          </div>
-          <div>
-            <strong>{{ ragStatus.feedback?.negative || 0 }}</strong>
-            <span>negative feedback</span>
-          </div>
-          <div>
-            <strong>{{ ragStatus.feedback?.positive || 0 }}</strong>
-            <span>useful feedback</span>
           </div>
           <div>
             <strong>{{ ragStatus.retrieval?.default_top_k || 0 }}</strong>
@@ -228,21 +233,30 @@ watch(
         </ul>
       </div>
 
-      <div class="operations-tabs" role="tablist" aria-label="Knowledge sections">
-        <button
-          type="button"
-          :class="{ active: knowledgeTab === 'documents' }"
-          @click="setKnowledgeTab('documents')"
-        >
-          Documents
-        </button>
-        <button
-          type="button"
-          :class="{ active: knowledgeTab === 'evaluation' }"
-          @click="setKnowledgeTab('evaluation')"
-        >
-          Answer Quality
-        </button>
+      <div class="knowledge-tab-actions">
+        <div class="operations-tabs" role="tablist" aria-label="Knowledge sections">
+          <button
+            type="button"
+            :class="{ active: knowledgeTab === 'documents' }"
+            @click="setKnowledgeTab('documents')"
+          >
+            Documents
+          </button>
+          <button
+            type="button"
+            :class="{ active: knowledgeTab === 'search' }"
+            @click="setKnowledgeTab('search')"
+          >
+            Search test
+          </button>
+          <button
+            type="button"
+            :class="{ active: knowledgeTab === 'evaluation' }"
+            @click="setKnowledgeTab('evaluation')"
+          >
+            Answer Quality
+          </button>
+        </div>
       </div>
 
       <template v-if="knowledgeTab === 'documents'">
@@ -292,7 +306,12 @@ watch(
         </form>
 
         <p v-if="knowledgeError" class="error knowledge-error">{{ knowledgeError }}</p>
-        <p v-if="knowledgeIndexJob && knowledgeIndexJob.status !== 'completed'" class="knowledge-status">
+        <p v-if="knowledgeIndexJob && knowledgeIndexJob.deduplicated" class="info knowledge-status">
+          ℹ️ This file already exists with the same content. Using existing document instead of creating a duplicate.
+          <br>
+          <small>Document ID: {{ knowledgeIndexJob.duplicate_of }}</small>
+        </p>
+        <p v-else-if="knowledgeIndexJob && knowledgeIndexJob.status !== 'completed'" class="knowledge-status">
           {{
             knowledgeIndexJob.status === "failed"
               ? `Index failed: ${knowledgeIndexJob.error || "unknown error"}`
@@ -300,51 +319,32 @@ watch(
           }}
         </p>
 
-        <form class="knowledge-search-form" @submit.prevent="searchKnowledge">
+        <div class="document-filters">
           <label>
-            <span>Search test</span>
+            <span>Document list search</span>
             <input
-              :value="knowledgeSearchQuery"
-              placeholder="Test a question against indexed knowledge"
-              @input="emit('update:knowledgeSearchQuery', $event.target.value)"
+              v-model="documentSearch"
+              placeholder="Search by file name, path, or department"
             />
           </label>
-          <button type="submit" :disabled="knowledgeSearchLoading || !knowledgeSearchQuery.trim()">
-            {{ knowledgeSearchLoading ? "Searching" : "Search" }}
-          </button>
-        </form>
-
-        <p v-if="knowledgeSearchError" class="error knowledge-error">{{ knowledgeSearchError }}</p>
-
-        <div v-if="knowledgeSearchResults.length" class="search-result-list">
-          <article
-            v-for="result in knowledgeSearchResults"
-            :key="result.chunk_id"
-            class="search-result-item"
-          >
-            <div class="search-result-meta">
-              <strong :title="result.document_id">{{ formatSourceName(result.document_id) }}</strong>
-              <span>#{{ result.chunk_index }}</span>
-              <span v-if="formatPageRange(result)">{{ formatPageRange(result) }}</span>
-              <span v-if="formatStructureLocation(result)">{{ formatStructureLocation(result) }}</span>
-              <span v-if="result.metadata?.lifecycle_status">{{ result.metadata.lifecycle_status }}</span>
-              <span v-if="result.metadata?.version">v{{ result.metadata.version }}</span>
-              <span>score {{ formatScore(result.score) }}</span>
-            </div>
-            <p>{{ result.text }}</p>
-          </article>
+          <label>
+            <span>Department</span>
+            <select v-model="documentDepartment">
+              <option value="">All</option>
+              <option
+                v-for="department in departments"
+                :key="department.id"
+                :value="department.name"
+              >
+                {{ department.name }}
+              </option>
+            </select>
+          </label>
         </div>
-
-        <p
-          v-else-if="knowledgeSearchQuery.trim() && !knowledgeSearchLoading && !knowledgeSearchError"
-          class="empty-state search-empty"
-        >
-          No matching chunks above score {{ defaultKnowledgeMinScore().toFixed(2) }}.
-        </p>
 
         <div class="document-list">
           <article
-            v-for="document in knowledgeDocuments"
+            v-for="document in pagedKnowledgeDocuments"
             :key="document.document_id"
             class="document-item"
           >
@@ -388,8 +388,75 @@ watch(
             </div>
           </article>
 
-          <p v-if="knowledgeDocuments.length === 0" class="empty-state">No indexed documents.</p>
+          <p v-if="filteredKnowledgeDocuments.length === 0" class="empty-state">No indexed documents.</p>
         </div>
+
+        <div v-if="totalDocumentPages > 1" class="document-pagination">
+          <button
+            type="button"
+            class="secondary-button"
+            :disabled="documentPage === 1"
+            @click="documentPage = Math.max(1, documentPage - 1)"
+          >
+            Previous
+          </button>
+          <span>
+            Page {{ documentPage }} / {{ totalDocumentPages }}
+            · {{ filteredKnowledgeDocuments.length }} document(s)
+          </span>
+          <button
+            type="button"
+            class="secondary-button"
+            :disabled="documentPage >= totalDocumentPages"
+            @click="documentPage = Math.min(totalDocumentPages, documentPage + 1)"
+          >
+            Next
+          </button>
+        </div>
+      </template>
+
+      <template v-else-if="knowledgeTab === 'search'">
+        <form class="knowledge-search-form" @submit.prevent="searchKnowledge">
+          <label>
+            <span>Search test</span>
+            <input
+              :value="knowledgeSearchQuery"
+              placeholder="Test a question against indexed knowledge"
+              @input="emit('update:knowledgeSearchQuery', $event.target.value)"
+            />
+          </label>
+          <button type="submit" :disabled="knowledgeSearchLoading || !knowledgeSearchQuery.trim()">
+            {{ knowledgeSearchLoading ? "Searching" : "Search" }}
+          </button>
+        </form>
+
+        <p v-if="knowledgeSearchError" class="error knowledge-error">{{ knowledgeSearchError }}</p>
+
+        <div v-if="knowledgeSearchResults.length" class="search-result-list">
+          <article
+            v-for="result in knowledgeSearchResults"
+            :key="result.chunk_id"
+            class="search-result-item"
+          >
+            <div class="search-result-meta">
+              <strong :title="result.document_id">{{ formatSourceName(result.document_id) }}</strong>
+              <span>#{{ result.chunk_index }}</span>
+              <span v-if="formatPageRange(result)">{{ formatPageRange(result) }}</span>
+              <span v-if="formatStructureLocation(result)">{{ formatStructureLocation(result) }}</span>
+              <span v-if="result.metadata?.lifecycle_status">{{ result.metadata.lifecycle_status }}</span>
+              <span v-if="result.metadata?.version">v{{ result.metadata.version }}</span>
+              <span>score {{ formatScore(result.score) }}</span>
+            </div>
+            <p>{{ result.text }}</p>
+          </article>
+        </div>
+
+        <p
+          v-else-if="knowledgeSearchQuery.trim() && !knowledgeSearchLoading && !knowledgeSearchError"
+          class="empty-state search-empty"
+        >
+          No matching chunks above score {{ defaultKnowledgeMinScore().toFixed(2) }}.
+        </p>
       </template>
 
       <template v-else>
