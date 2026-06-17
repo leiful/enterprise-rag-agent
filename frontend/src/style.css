@@ -762,6 +762,23 @@ button.conversation-item:not(:disabled):hover {
   resize: none;
 }
 
+.document-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.45fr);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+  padding-right: 12px;
+}
+
+.document-filters label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .file-row button[type="submit"] {
   width: 72px;
   min-width: 0;
@@ -1644,7 +1661,7 @@ button.conversation-item:not(:disabled):hover {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
-  margin: 0;
+  margin: 0 0 14px;
   padding: 0;
   min-width: 320px;
   max-width: 560px;
@@ -2097,6 +2114,11 @@ button:disabled {
 
   .department-form button[type="submit"] {
     width: 100%;
+  }
+
+  .document-filters {
+    grid-template-columns: 1fr;
+    padding-right: 0;
   }
 
   .file-row {

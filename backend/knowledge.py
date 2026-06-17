@@ -132,8 +132,10 @@ def normalize_metadata_date(value, field_name):
     return parsed.astimezone(timezone.utc).isoformat(), None
 
 
-def validate_document_metadata(metadata):
+def validate_document_metadata(metadata, *, require_department=False):
     if metadata is None:
+        if require_department:
+            return None, "metadata.department is required"
         return {}, None
     if not isinstance(metadata, dict):
         return None, "metadata must be an object"
@@ -168,6 +170,9 @@ def validate_document_metadata(metadata):
             return None, error
         if normalized is not None:
             normalized_metadata[key] = normalized
+
+    if require_department and not normalized_metadata.get("department"):
+        return None, "metadata.department is required"
 
     effective_date = normalized_metadata.get("effective_date")
     expiry_date = normalized_metadata.get("expiry_date")

@@ -283,7 +283,7 @@ watch([documentSearch, documentDepartment, () => props.knowledgeDocuments], () =
               :value="knowledgeDepartment"
               @change="emit('update:knowledgeDepartment', $event.target.value)"
             >
-              <option value="">Public</option>
+              <option value="">Select department</option>
               <option v-for="department in departments" :key="department.id" :value="department.name">
                 {{ department.name }}
               </option>
@@ -299,7 +299,7 @@ watch([documentSearch, documentDepartment, () => props.knowledgeDocuments], () =
             <button class="secondary-button file-button" type="button" @click="chooseFile">
               Browse
             </button>
-            <button type="submit" :disabled="knowledgeLoading || !selectedKnowledgeFile">
+            <button type="submit" :disabled="knowledgeLoading || !selectedKnowledgeFile || !knowledgeDepartment">
               {{ knowledgeLoading ? "Uploading" : "Upload" }}
             </button>
           </div>

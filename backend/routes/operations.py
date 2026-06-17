@@ -616,7 +616,10 @@ def upload_knowledge_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         )
-    normalized_metadata, error = knowledge.validate_document_metadata(metadata_dict)
+    normalized_metadata, error = knowledge.validate_document_metadata(
+        metadata_dict,
+        require_department=REQUIRE_DOCUMENT_DEPARTMENT,
+    )
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

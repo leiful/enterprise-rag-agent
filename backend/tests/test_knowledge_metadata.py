@@ -68,6 +68,15 @@ class KnowledgeMetadataValidationTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(metadata, {"owner": "Ops"})
 
+    def test_department_can_be_required(self):
+        metadata, error = knowledge.validate_document_metadata(
+            {"department": ""},
+            require_department=True,
+        )
+
+        self.assertIsNone(metadata)
+        self.assertEqual(error, "metadata.department is required")
+
 
 if __name__ == "__main__":
     unittest.main()
