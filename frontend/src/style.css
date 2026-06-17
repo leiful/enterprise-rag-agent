@@ -1414,9 +1414,38 @@ button.conversation-item:not(:disabled):hover {
   margin-right: 12px;
 }
 
-.feedback-item .audit-answer {
+.feedback-answer-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   color: #64748b;
+  white-space: pre-wrap;
+}
+
+.feedback-answer-preview.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.feedback-inline-button {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
   font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.feedback-inline-button:not(:disabled):hover {
+  background: transparent;
+  color: #1e40af;
+  box-shadow: none;
 }
 
 .eval-failure-list span {

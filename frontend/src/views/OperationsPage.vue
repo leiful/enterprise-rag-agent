@@ -1,4 +1,6 @@
 <script setup>
+import { reactive } from "vue";
+
 defineProps({
   operationsView: { type: String, required: true },
   operationsTab: { type: String, required: true },
@@ -45,6 +47,28 @@ defineProps({
   auditSourceGroups: { type: Function, required: true },
   auditChunkLabel: { type: Function, required: true },
 });
+
+const expandedAnswers = reactive({});
+
+function answerKey(item) {
+  return item.id || `${item.conversation_id || "conversation"}-${item.created_at || "time"}`;
+}
+
+function isAnswerExpanded(item) {
+  return Boolean(expandedAnswers[answerKey(item)]);
+}
+
+function toggleAnswer(item) {
+  const key = answerKey(item);
+  expandedAnswers[key] = !expandedAnswers[key];
+}
+
+function shouldShowAnswerToggle(answer) {
+  if (!answer) {
+    return false;
+  }
+  return String(answer).length > 140 || String(answer).includes("\n");
+}
 </script>
 
 <template>
@@ -136,6 +160,21 @@ defineProps({
                   <span>{{ formatDate(item.created_at) }}</span>
                 </div>
                 <p>{{ item.query || item.answer || "No question captured." }}</p>
+                <p
+                  v-if="item.answer"
+                  class="feedback-answer-preview"
+                  :class="{ expanded: isAnswerExpanded(item) }"
+                >
+                  {{ item.answer }}
+                </p>
+                <button
+                  v-if="shouldShowAnswerToggle(item.answer)"
+                  class="feedback-inline-button"
+                  type="button"
+                  @click="toggleAnswer(item)"
+                >
+                  {{ isAnswerExpanded(item) ? "Show less" : "Show more" }}
+                </button>
                 <p class="audit-meta">
                   <span>{{ item.sources?.length || 0 }} sources</span>
                   <span v-if="item.conversation_id">conversation {{ item.conversation_id }}</span>
@@ -281,7 +320,21 @@ defineProps({
               <span>{{ formatDate(item.created_at) }}</span>
             </div>
             <p>{{ item.query || item.answer || "No question captured." }}</p>
-            <p v-if="item.answer" class="audit-answer">{{ item.answer }}</p>
+            <p
+              v-if="item.answer"
+              class="feedback-answer-preview"
+              :class="{ expanded: isAnswerExpanded(item) }"
+            >
+              {{ item.answer }}
+            </p>
+            <button
+              v-if="shouldShowAnswerToggle(item.answer)"
+              class="feedback-inline-button"
+              type="button"
+              @click="toggleAnswer(item)"
+            >
+              {{ isAnswerExpanded(item) ? "Show less" : "Show more" }}
+            </button>
             <p class="audit-meta">
               <span>{{ item.sources?.length || 0 }} sources</span>
               <span v-if="item.conversation_id">conversation {{ item.conversation_id }}</span>
