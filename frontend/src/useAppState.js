@@ -96,11 +96,11 @@ export function useAppState() {
   const auditTotalPages = computed(() => totalPages(knowledgeAudits.value.length, pageSize));
   const missingDocTotalPages = computed(() => totalPages(missingDocFeedback.value.length, pageSize));
   const chatAdmissionLabel = computed(() => {
-    const admission = ragStatus.value?.chat_admission;
-    if (!admission) {
-      return "0/20";
+    const active = ragStatus.value?.active_users;
+    if (active === undefined || active === null) {
+      return "在线: 0";
     }
-    return `${admission.active || 0}/${admission.max_concurrent || 20}`;
+    return `在线: ${active}`;
   });
   const selectedRagEvalSuiteInfo = computed(() =>
     ragEvalSuites.value.find((suite) => suite.id === selectedRagEvalSuite.value),

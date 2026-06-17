@@ -27,3 +27,6 @@ frontend/.npm-cache/
 docs/assets/raw/
 
 .codex-*.log
+
+certbot/conf/
+certbot/www/

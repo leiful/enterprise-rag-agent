@@ -467,6 +467,7 @@ def get_rag_operational_status():
             "require_document_department": REQUIRE_DOCUMENT_DEPARTMENT,
         },
         "chat_admission": app_state.current_chat_admission_status(),
+        "active_users": database.count_active_sessions(),
         "quality": {
             "latest_eval": eval_report.get("summary", {}) if eval_report.get("available") else {},
         },

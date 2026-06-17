@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import secrets
+import time
 from datetime import datetime, timezone
 
 import psycopg
@@ -490,6 +491,15 @@ def get_session(session_id, now):
 def delete_session(session_id):
     with connect() as connection:
         connection.execute("DELETE FROM sessions WHERE id = %s", (session_id,))
+
+
+def count_active_sessions():
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS cnt FROM sessions WHERE expires_at > %s",
+            (time.time(),),
+        ).fetchone()
+    return row["cnt"] if row else 0
 
 
 def create_conversation(user_id, title):

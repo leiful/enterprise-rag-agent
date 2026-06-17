@@ -20,6 +20,8 @@
 - 设置 `CORS_ALLOW_LOCALHOST_REGEX=false`。
 - 将 `CORS_ALLOWED_ORIGINS` 精确设置为生产前端来源。
 - 对带凭证的浏览器会话，不要使用通配符 CORS 来源。
+- 使用 Let's Encrypt 免费证书：运行 `bash init-ssl.sh your-domain.com` 自动完成申请和 nginx 配置切换。
+- 证书续期由 crontab 自动执行（脚本已输出对应的 cron 配置），无需手动干预。
 
 ## 数据边界
 

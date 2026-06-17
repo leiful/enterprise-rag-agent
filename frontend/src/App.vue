@@ -41,7 +41,7 @@ const {
           <span
             v-if="isAuthenticated && isAdmin"
             class="chat-capacity-status"
-            title="Active chats / chat limit"
+            title="在线用户数"
           >
             {{ chatAdmissionLabel }}
           </span>
