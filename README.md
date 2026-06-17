@@ -1,4 +1,4 @@
-# 企业级 RAG Agent
+# RAG Agent
 
 面向中小企业部署场景的 RAG 助手与运维控制台。
 
