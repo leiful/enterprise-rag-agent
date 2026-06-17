@@ -4,8 +4,10 @@ defineProps({
   operationsTab: { type: String, required: true },
   feedbackLoading: { type: Boolean, required: true },
   feedbackError: { type: String, default: "" },
+  selectedFeedbackType: { type: String, default: "" },
   ragFeedbackSummary: { type: Object, default: null },
   ragFeedback: { type: Array, required: true },
+  filteredRagFeedback: { type: Array, required: true },
   pagedRagFeedback: { type: Array, required: true },
   pageSize: { type: Number, required: true },
   feedbackPage: { type: Number, required: true },
@@ -25,10 +27,12 @@ defineProps({
   setOperationsTab: { type: Function, required: true },
   loadRagFeedback: { type: Function, required: true },
   setFeedbackPage: { type: Function, required: true },
+  setFeedbackTypeFilter: { type: Function, required: true },
   loadKnowledgeAudits: { type: Function, required: true },
   setAuditPage: { type: Function, required: true },
   setMissingDocPage: { type: Function, required: true },
   feedbackTypeLabel: { type: Function, required: true },
+  feedbackFilterOptions: { type: Function, required: true },
   formatDate: { type: Function, required: true },
   formatSourceName: { type: Function, required: true },
   formatDepartments: { type: Function, required: true },
@@ -105,33 +109,26 @@ defineProps({
 
           <div class="feedback-panel">
             <div class="rag-metric-grid feedback-metric-grid">
-              <div>
-                <strong>{{ ragFeedbackSummary?.total || 0 }}</strong>
-                <span>total</span>
-              </div>
-              <div>
-                <strong>{{ ragFeedbackSummary?.positive || 0 }}</strong>
-                <span>useful</span>
-              </div>
-              <div>
-                <strong>{{ ragFeedbackSummary?.negative || 0 }}</strong>
-                <span>needs work</span>
-              </div>
-              <div>
-                <strong>{{ ragFeedbackSummary?.by_type?.wrong_source || 0 }}</strong>
-                <span>wrong source</span>
-              </div>
               <button
+                v-for="filter in feedbackFilterOptions(ragFeedbackSummary)"
+                :key="filter.type"
                 class="metric-button"
                 type="button"
-                :disabled="(ragFeedbackSummary?.by_type?.missing_doc || 0) === 0"
-                @click="openMissingDocManagement"
+                :class="{ active: selectedFeedbackType === filter.type || (!selectedFeedbackType && !filter.type) }"
+                :disabled="filter.count === 0"
+                @click="setFeedbackTypeFilter(filter.type)"
               >
-                <strong>{{ ragFeedbackSummary?.by_type?.missing_doc || 0 }}</strong>
-                <span>missing doc</span>
+                <strong>{{ filter.count }}</strong>
+                <span>{{ filter.label }}</span>
               </button>
             </div>
-            <div v-if="ragFeedback.length" class="feedback-list">
+            <div v-if="selectedFeedbackType" class="feedback-filter-row">
+              <span>{{ feedbackTypeLabel(selectedFeedbackType) }} feedback</span>
+              <button class="secondary-button" type="button" @click="setFeedbackTypeFilter(selectedFeedbackType)">
+                Clear
+              </button>
+            </div>
+            <div v-if="filteredRagFeedback.length" class="feedback-list">
               <article v-for="item in pagedRagFeedback" :key="item.id" class="feedback-item">
                 <div class="audit-title">
                   <strong>{{ item.username }}</strong>
@@ -146,7 +143,7 @@ defineProps({
                 </p>
               </article>
             </div>
-            <div v-if="ragFeedback.length > pageSize" class="pagination">
+            <div v-if="filteredRagFeedback.length > pageSize" class="pagination">
               <button
                 class="secondary-button"
                 type="button"
@@ -165,8 +162,8 @@ defineProps({
                 Next
               </button>
             </div>
-            <p v-if="ragFeedback.length === 0 && !feedbackLoading" class="empty-state">
-              No answer feedback yet.
+            <p v-if="filteredRagFeedback.length === 0 && !feedbackLoading" class="empty-state">
+              {{ selectedFeedbackType ? `No ${feedbackTypeLabel(selectedFeedbackType)} feedback yet.` : "No answer feedback yet." }}
             </p>
           </div>
         </template>

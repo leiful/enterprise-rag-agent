@@ -510,6 +510,12 @@ button.conversation-item:not(:disabled):hover {
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
 }
 
+.rag-metric-grid .metric-button.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
 .rag-metric-grid .metric-button:disabled {
   background: #ffffff;
   opacity: 0.62;
@@ -1066,6 +1072,26 @@ button.conversation-item:not(:disabled):hover {
 .eval-metric-grid,
 .feedback-metric-grid {
   grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+}
+
+.feedback-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.feedback-filter-row .secondary-button {
+  height: 28px;
+  padding: 0 10px;
 }
 
 .failure-reason-row {

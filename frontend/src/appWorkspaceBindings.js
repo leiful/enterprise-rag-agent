@@ -1,4 +1,5 @@
 import { createWorkspaceBindings } from "./workspaceBindings.js";
+import { feedbackFilterOptions } from "./feedbackFilters.js";
 import {
   auditCandidateCount,
   auditChunkLabel,
@@ -79,6 +80,7 @@ export function createAppWorkspaceBindings({ state, modelUsage, adminData, chat,
       setOperationsTab: navigation.setOperationsTab,
       loadRagFeedback: adminData.loadRagFeedback,
       setFeedbackPage: navigation.setFeedbackPage,
+      setFeedbackTypeFilter: navigation.setFeedbackTypeFilter,
       loadKnowledgeAudits: adminData.loadKnowledgeAudits,
       setAuditPage: navigation.setAuditPage,
       setMissingDocPage: navigation.setMissingDocPage,
@@ -86,6 +88,7 @@ export function createAppWorkspaceBindings({ state, modelUsage, adminData, chat,
     helpers: {
       feedbackOptions,
       feedbackTypeLabel,
+      feedbackFilterOptions,
       hasSources,
       formatDate,
       formatSourceName,

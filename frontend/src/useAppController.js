@@ -28,7 +28,7 @@ const {
   userEdits, knowledgeAudits, auditLoading, auditError, ragEval, ragEvalLoading, ragEvalError,
   ragEvalSuites, selectedRagEvalSuite, ragEvalRunning, modelUsage, modelUsageLoading,
   modelUsageError, ragFeedback, ragFeedbackSummary, feedbackLoading, feedbackError,
-  operationsView, operationsTab, usersTab, knowledgeTab, feedbackPage, auditPage, missingDocPage,
+  selectedFeedbackType, operationsView, operationsTab, usersTab, knowledgeTab, feedbackPage, auditPage, missingDocPage,
   usageEventsPage, deepseekBalance, balanceLoading, balanceError, messages, isAuthenticated,
   isAdmin, missingDocFeedback, pageSize, feedbackTotalPages, auditTotalPages,
   missingDocTotalPages, chatAdmissionLabel,
@@ -115,6 +115,7 @@ const {
     ragFeedbackSummary,
     feedbackLoading,
     feedbackError,
+    selectedFeedbackType,
     feedbackPage,
     missingDocPage,
     deepseekBalance,
@@ -345,6 +346,11 @@ function setFeedbackPage(page) {
   feedbackPage.value = Math.max(1, Math.min(page, feedbackTotalPages.value));
 }
 
+function setFeedbackTypeFilter(type) {
+  selectedFeedbackType.value = selectedFeedbackType.value === type ? "" : type;
+  feedbackPage.value = 1;
+}
+
 function setAuditPage(page) {
   auditPage.value = Math.max(1, Math.min(page, auditTotalPages.value));
 }
@@ -395,6 +401,7 @@ const workspaceBindings = createAppWorkspaceBindings({
     openOperationsOverview,
     setAuditPage,
     setFeedbackPage,
+    setFeedbackTypeFilter,
     setKnowledgeTab,
     setMissingDocPage,
     setModelUsagePeriod,

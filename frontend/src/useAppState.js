@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import { DEFAULT_RAG_EVAL_SUITES, PAGE_SIZE } from "./appConfig.js";
+import { filterFeedbackByType } from "./feedbackFilters.js";
 import { paginateItems, totalPages } from "./pagination.js";
 import { emptyMessages } from "./uiHelpers.js";
 
@@ -64,6 +65,7 @@ export function useAppState() {
   const ragFeedbackSummary = ref(null);
   const feedbackLoading = ref(false);
   const feedbackError = ref("");
+  const selectedFeedbackType = ref("");
   const operationsView = ref("overview");
   const operationsTab = ref("feedback");
   const usersTab = ref("users");
@@ -83,11 +85,14 @@ export function useAppState() {
   const missingDocFeedback = computed(() =>
     ragFeedback.value.filter((item) => item.feedback_type === "missing_doc"),
   );
+  const filteredRagFeedback = computed(() =>
+    filterFeedbackByType(ragFeedback.value, selectedFeedbackType.value),
+  );
   const pageSize = PAGE_SIZE;
-  const pagedRagFeedback = computed(() => paginateItems(ragFeedback.value, feedbackPage.value, pageSize));
+  const pagedRagFeedback = computed(() => paginateItems(filteredRagFeedback.value, feedbackPage.value, pageSize));
   const pagedKnowledgeAudits = computed(() => paginateItems(knowledgeAudits.value, auditPage.value, pageSize));
   const pagedMissingDocFeedback = computed(() => paginateItems(missingDocFeedback.value, missingDocPage.value, pageSize));
-  const feedbackTotalPages = computed(() => totalPages(ragFeedback.value.length, pageSize));
+  const feedbackTotalPages = computed(() => totalPages(filteredRagFeedback.value.length, pageSize));
   const auditTotalPages = computed(() => totalPages(knowledgeAudits.value.length, pageSize));
   const missingDocTotalPages = computed(() => totalPages(missingDocFeedback.value.length, pageSize));
   const chatAdmissionLabel = computed(() => {
@@ -162,6 +167,7 @@ export function useAppState() {
     ragFeedbackSummary,
     feedbackLoading,
     feedbackError,
+    selectedFeedbackType,
     operationsView,
     operationsTab,
     usersTab,
@@ -177,6 +183,7 @@ export function useAppState() {
     isAuthenticated,
     isAdmin,
     hasEnabledKnowledgeSources,
+    filteredRagFeedback,
     missingDocFeedback,
     pageSize,
     pagedRagFeedback,
