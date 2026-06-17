@@ -5,23 +5,14 @@
 ## 目标
 
 - 让 GitHub 首页展示稳定、统一、易维护
-- 让占位图后续可平滑替换为真实截图
+- 使用可公开展示的正式截图和架构图
 - 避免把原稿、临时导出文件和超大素材提交进仓库
 
 ## 建议保留的正式资源
 
-- `console-overview-placeholder.svg`
-- `knowledge-management-placeholder.svg`
-- `architecture-placeholder.svg`
-- 后续替换后的正式截图或架构图导出文件
-
-建议正式展示文件使用以下命名：
-
-```text
-console-overview.png
-knowledge-management.png
-architecture-diagram.png
-```
+- `console-overview.jpg`
+- `knowledge-management.jpg`
+- `architecture-diagram.svg`
 
 ## 尺寸建议
 
@@ -43,10 +34,10 @@ architecture-diagram.png
 - 原始截图、设计稿和临时导出文件放到 `docs/assets/raw/`
 - `docs/assets/raw/` 默认不进入 Git
 
-## 替换占位图时的建议步骤
+## 更新展示资源时的建议步骤
 
 1. 准备正式截图或架构图
 2. 按推荐命名导出到 `docs/assets/`
 3. 更新 `README.md` 中的图片引用
 4. 确认 GitHub 预览效果、清晰度和首屏长度
-5. 删除不再使用的占位图引用
+5. 删除不再使用的旧资源引用

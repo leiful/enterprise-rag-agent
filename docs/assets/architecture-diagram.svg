@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">Enterprise RAG Agent System Architecture</title>
+  <desc id="desc">Architecture diagram showing browser console, FastAPI backend, RAG indexing and query pipelines, PostgreSQL, Chroma, local knowledge files, and model APIs.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#475569"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #d8e0ea; stroke-width: 1.5; filter: url(#shadow); }
+      .module { fill: #f8fafc; stroke: #d8e0ea; stroke-width: 1.2; }
+      .frontend { fill: #eff6ff; stroke: #93c5fd; }
+      .backend { fill: #f0fdf4; stroke: #86efac; }
+      .data { fill: #fff7ed; stroke: #fdba74; }
+      .external { fill: #f5f3ff; stroke: #c4b5fd; }
+      .flow { fill: #eef2ff; stroke: #a5b4fc; }
+      .quality { fill: #fefce8; stroke: #fde047; }
+      .title { font: 700 30px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #64748b; }
+      .h2 { font: 700 20px Arial, sans-serif; fill: #0f172a; }
+      .h3 { font: 700 15px Arial, sans-serif; fill: #1e293b; }
+      .body { font: 400 13px Arial, sans-serif; fill: #475569; }
+      .small { font: 400 12px Arial, sans-serif; fill: #64748b; }
+      .label { font: 700 12px Arial, sans-serif; fill: #334155; }
+      .line { stroke: #475569; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .soft-line { stroke: #94a3b8; stroke-width: 1.7; fill: none; marker-end: url(#arrow); stroke-dasharray: 6 6; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1400" height="820"/>
+
+  <text x="70" y="58" class="title">Enterprise RAG Agent Architecture</text>
+  <text x="70" y="86" class="subtitle">A self-hosted RAG console for SME knowledge Q&amp;A, operations, audit, evaluation, and cost visibility.</text>
+
+  <rect x="70" y="130" width="250" height="255" rx="16" class="panel frontend"/>
+  <text x="98" y="170" class="h2">Vue 3 Console</text>
+  <text x="98" y="198" class="body">Browser-based workspace for users</text>
+  <rect x="98" y="222" width="194" height="34" rx="8" class="module"/>
+  <text x="116" y="244" class="h3">Chat Workspace</text>
+  <rect x="98" y="266" width="194" height="34" rx="8" class="module"/>
+  <text x="116" y="288" class="h3">Knowledge Management</text>
+  <rect x="98" y="310" width="194" height="34" rx="8" class="module"/>
+  <text x="116" y="332" class="h3">Operations &amp; Eval</text>
+  <rect x="98" y="354" width="194" height="34" rx="8" class="module"/>
+  <text x="116" y="376" class="h3">Users &amp; Token Monitor</text>
+
+  <rect x="405" y="112" width="330" height="310" rx="18" class="panel backend"/>
+  <text x="433" y="152" class="h2">FastAPI Backend</text>
+  <text x="433" y="180" class="body">Application boundary and RAG orchestration</text>
+  <rect x="433" y="205" width="126" height="42" rx="8" class="module"/>
+  <text x="452" y="231" class="h3">Auth / Session</text>
+  <rect x="581" y="205" width="126" height="42" rx="8" class="module"/>
+  <text x="606" y="231" class="h3">Chat API</text>
+  <rect x="433" y="263" width="126" height="42" rx="8" class="module"/>
+  <text x="451" y="289" class="h3">RAG Runtime</text>
+  <rect x="581" y="263" width="126" height="42" rx="8" class="module"/>
+  <text x="596" y="289" class="h3">Index Jobs</text>
+  <rect x="433" y="321" width="126" height="42" rx="8" class="module"/>
+  <text x="449" y="347" class="h3">Admin Routes</text>
+  <rect x="581" y="321" width="126" height="42" rx="8" class="module"/>
+  <text x="596" y="347" class="h3">Audit / Usage</text>
+  <text x="433" y="394" class="small">Security headers, CORS policy, runtime config validation, request IDs</text>
+
+  <rect x="825" y="92" width="220" height="135" rx="16" class="panel data"/>
+  <text x="853" y="132" class="h2">PostgreSQL</text>
+  <text x="853" y="160" class="body">Users, sessions, conversations</text>
+  <text x="853" y="184" class="body">metadata, BM25, audit, feedback</text>
+
+  <rect x="825" y="262" width="220" height="112" rx="16" class="panel data"/>
+  <text x="853" y="302" class="h2">Chroma</text>
+  <text x="853" y="330" class="body">Vector index and semantic search</text>
+
+  <rect x="825" y="410" width="220" height="112" rx="16" class="panel data"/>
+  <text x="853" y="450" class="h2">knowledge_files/</text>
+  <text x="853" y="478" class="body">Uploaded files and local sources</text>
+
+  <rect x="1130" y="174" width="220" height="164" rx="16" class="panel external"/>
+  <text x="1158" y="214" class="h2">Model APIs</text>
+  <text x="1158" y="242" class="body">Chat completion</text>
+  <text x="1158" y="266" class="body">Embeddings</text>
+  <text x="1158" y="290" class="body">Optional rerank</text>
+  <text x="1158" y="314" class="small">Provider keys stay server-side</text>
+
+  <path d="M320 255 C350 255 370 255 405 255" class="line"/>
+  <text x="338" y="242" class="label">HTTPS / Cookie</text>
+  <path d="M735 180 C765 170 790 160 825 154" class="line"/>
+  <path d="M735 289 C770 298 790 306 825 316" class="line"/>
+  <path d="M735 345 C770 383 790 423 825 462" class="soft-line"/>
+  <path d="M1045 296 C1078 280 1102 266 1130 254" class="line"/>
+
+  <rect x="70" y="495" width="580" height="238" rx="18" class="panel flow"/>
+  <text x="98" y="535" class="h2">Indexing Pipeline</text>
+  <text x="98" y="563" class="body">Turn managed files into searchable, auditable knowledge.</text>
+  <rect x="98" y="596" width="94" height="48" rx="9" class="module"/>
+  <text x="121" y="616" class="h3">Upload</text>
+  <text x="116" y="634" class="small">or sync</text>
+  <rect x="222" y="596" width="94" height="48" rx="9" class="module"/>
+  <text x="246" y="616" class="h3">Parse</text>
+  <text x="241" y="634" class="small">PDF, docs</text>
+  <rect x="346" y="596" width="94" height="48" rx="9" class="module"/>
+  <text x="365" y="616" class="h3">Chunk</text>
+  <text x="360" y="634" class="small">metadata</text>
+  <rect x="470" y="596" width="94" height="48" rx="9" class="module"/>
+  <text x="488" y="616" class="h3">Embed</text>
+  <text x="494" y="634" class="small">batch</text>
+  <path d="M192 620 L222 620" class="line"/>
+  <path d="M316 620 L346 620" class="line"/>
+  <path d="M440 620 L470 620" class="line"/>
+  <path d="M564 620 C595 620 608 598 635 565" class="line"/>
+  <text x="98" y="686" class="body">Writes vectors to Chroma, chunk metadata and BM25 postings to PostgreSQL, then records index job status.</text>
+
+  <rect x="750" y="495" width="580" height="238" rx="18" class="panel flow"/>
+  <text x="778" y="535" class="h2">Query Pipeline</text>
+  <text x="778" y="563" class="body">Answer with evidence while recording quality, access, and cost signals.</text>
+  <rect x="778" y="596" width="88" height="48" rx="9" class="module"/>
+  <text x="800" y="616" class="h3">Ask</text>
+  <text x="794" y="634" class="small">question</text>
+  <rect x="892" y="596" width="88" height="48" rx="9" class="module"/>
+  <text x="905" y="616" class="h3">Rewrite</text>
+  <text x="910" y="634" class="small">multi-query</text>
+  <rect x="1006" y="596" width="88" height="48" rx="9" class="module"/>
+  <text x="1021" y="616" class="h3">Retrieve</text>
+  <text x="1018" y="634" class="small">hybrid</text>
+  <rect x="1120" y="596" width="88" height="48" rx="9" class="module"/>
+  <text x="1136" y="616" class="h3">Rerank</text>
+  <text x="1139" y="634" class="small">optional</text>
+  <rect x="1234" y="596" width="68" height="48" rx="9" class="module"/>
+  <text x="1250" y="616" class="h3">Cite</text>
+  <text x="1248" y="634" class="small">answer</text>
+  <path d="M866 620 L892 620" class="line"/>
+  <path d="M980 620 L1006 620" class="line"/>
+  <path d="M1094 620 L1120 620" class="line"/>
+  <path d="M1208 620 L1234 620" class="line"/>
+  <text x="778" y="686" class="body">Applies department filters, abstention rules, source citation, feedback capture, audit trails, and model usage tracking.</text>
+
+  <rect x="405" y="752" width="590" height="42" rx="12" class="quality"/>
+  <text x="432" y="778" class="h3">Production signals:</text>
+  <text x="572" y="778" class="body">health checks, RAG status, eval reports, missing-doc feedback, admin audit, token usage</text>
+</svg>

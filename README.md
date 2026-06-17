@@ -29,19 +29,19 @@
 
 ## 界面预览
 
-> 可将下面的占位图替换为实际截图，建议保留统一尺寸与浅色背景。素材命名和尺寸建议见 `docs/assets/README.md`。
+以下截图展示聊天工作台、知识库管理和系统架构，覆盖用户问答、知识维护与 RAG 生产链路。
 
 ### 控制台总览
 
-![控制台总览](docs/assets/console-overview-placeholder.svg)
+![控制台总览](docs/assets/console-overview.jpg)
 
 ### 知识库管理
 
-![知识库管理](docs/assets/knowledge-management-placeholder.svg)
+![知识库管理](docs/assets/knowledge-management.jpg)
 
 ## 架构概览
 
-![系统架构图](docs/assets/architecture-placeholder.svg)
+![系统架构图](docs/assets/architecture-diagram.svg)
 
 ## 核心能力
 
