@@ -202,6 +202,8 @@ defineProps({
       :feedback-filter-options="b.feedbackFilterOptions"
       :format-date="b.formatDate"
       :format-source-name="b.formatSourceName"
+      :format-score="b.formatScore"
+      :format-page-range="b.formatPageRange"
       :format-departments="b.formatDepartments"
       :format-audit-scope="b.formatAuditScope"
       :audit-candidate-count="b.auditCandidateCount"

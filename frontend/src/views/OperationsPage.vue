@@ -37,6 +37,8 @@ defineProps({
   feedbackFilterOptions: { type: Function, required: true },
   formatDate: { type: Function, required: true },
   formatSourceName: { type: Function, required: true },
+  formatScore: { type: Function, required: true },
+  formatPageRange: { type: Function, required: true },
   formatDepartments: { type: Function, required: true },
   formatAuditScope: { type: Function, required: true },
   auditCandidateCount: { type: Function, required: true },
@@ -119,14 +121,6 @@ function shouldShowAnswerToggle(answer) {
               <h3>Answer feedback</h3>
               <p>User feedback grouped into retraining and document-fix signals.</p>
             </div>
-            <button
-              class="secondary-button"
-              type="button"
-              :disabled="feedbackLoading"
-              @click="loadRagFeedback"
-            >
-              Refresh
-            </button>
           </div>
 
           <p v-if="feedbackError" class="error users-error">{{ feedbackError }}</p>
@@ -146,20 +140,28 @@ function shouldShowAnswerToggle(answer) {
                 <span>{{ filter.label }}</span>
               </button>
             </div>
-            <div v-if="selectedFeedbackType" class="feedback-filter-row">
-              <span>{{ feedbackTypeLabel(selectedFeedbackType) }} feedback</span>
-              <button class="secondary-button" type="button" @click="setFeedbackTypeFilter(selectedFeedbackType)">
-                Clear
-              </button>
-            </div>
             <div v-if="filteredRagFeedback.length" class="feedback-list">
               <article v-for="item in pagedRagFeedback" :key="item.id" class="feedback-item">
-                <div class="audit-title">
-                  <strong>{{ item.username }}</strong>
-                  <span>{{ feedbackTypeLabel(item.feedback_type) }}</span>
-                  <span>{{ formatDate(item.created_at) }}</span>
+                <div class="feedback-item-header">
+                  <div class="feedback-question-group">
+                    <p class="feedback-question">{{ item.query || "No question captured." }}</p>
+                    <button
+                      v-if="shouldShowAnswerToggle(item.answer)"
+                      class="feedback-inline-button"
+                      type="button"
+                      @click="toggleAnswer(item)"
+                    >
+                      {{ isAnswerExpanded(item) ? "Show less" : "Show more" }}
+                    </button>
+                  </div>
+                  <div class="feedback-title-meta">
+                    <strong>{{ item.username }}</strong>
+                    <span>{{ feedbackTypeLabel(item.feedback_type) }}</span>
+                  </div>
+                  <div class="feedback-title-actions">
+                    <span>{{ formatDate(item.created_at) }}</span>
+                  </div>
                 </div>
-                <p>{{ item.query || item.answer || "No question captured." }}</p>
                 <p
                   v-if="item.answer"
                   class="feedback-answer-preview"
@@ -167,19 +169,29 @@ function shouldShowAnswerToggle(answer) {
                 >
                   {{ item.answer }}
                 </p>
-                <button
-                  v-if="shouldShowAnswerToggle(item.answer)"
-                  class="feedback-inline-button"
-                  type="button"
-                  @click="toggleAnswer(item)"
+                <div
+                  v-if="isAnswerExpanded(item) && item.sources?.length"
+                  class="feedback-source-list"
                 >
-                  {{ isAnswerExpanded(item) ? "Show less" : "Show more" }}
-                </button>
-                <p class="audit-meta">
-                  <span>{{ item.sources?.length || 0 }} sources</span>
-                  <span v-if="item.conversation_id">conversation {{ item.conversation_id }}</span>
-                  <span v-if="item.sources?.[0]">{{ formatSourceName(item.sources[0].document_id) }}</span>
-                </p>
+                  <details
+                    v-for="source in item.sources"
+                    :key="source.chunk_id || `${source.document_id}-${source.chunk_index}`"
+                    class="feedback-source-item"
+                  >
+                    <summary>
+                      <span class="source-label">[{{ source.label }}]</span>
+                      <span class="source-document" :title="source.document_id || ''">
+                        {{ formatSourceName(source.document_id) }}
+                      </span>
+                      <span class="source-meta-clean">
+                        chunk {{ source.chunk_index }}
+                        <template v-if="formatPageRange(source)"> | {{ formatPageRange(source) }}</template>
+                        | score {{ formatScore(source.score) }}
+                      </span>
+                    </summary>
+                    <p>{{ source.text || "No snippet text recorded." }}</p>
+                  </details>
+                </div>
               </article>
             </div>
             <div v-if="filteredRagFeedback.length > pageSize" class="pagination">
@@ -315,11 +327,25 @@ function shouldShowAnswerToggle(answer) {
 
         <div v-if="missingDocFeedback.length" class="feedback-list missing-doc-list">
           <article v-for="item in pagedMissingDocFeedback" :key="item.id" class="feedback-item">
-            <div class="audit-title">
-              <strong>{{ item.username }}</strong>
-              <span>{{ formatDate(item.created_at) }}</span>
+            <div class="feedback-item-header">
+              <div class="feedback-question-group">
+                <p class="feedback-question">{{ item.query || "No question captured." }}</p>
+                <button
+                  v-if="shouldShowAnswerToggle(item.answer)"
+                  class="feedback-inline-button"
+                  type="button"
+                  @click="toggleAnswer(item)"
+                >
+                  {{ isAnswerExpanded(item) ? "Show less" : "Show more" }}
+                </button>
+              </div>
+              <div class="feedback-title-meta">
+                <strong>{{ item.username }}</strong>
+              </div>
+              <div class="feedback-title-actions">
+                <span>{{ formatDate(item.created_at) }}</span>
+              </div>
             </div>
-            <p>{{ item.query || item.answer || "No question captured." }}</p>
             <p
               v-if="item.answer"
               class="feedback-answer-preview"
@@ -327,19 +353,29 @@ function shouldShowAnswerToggle(answer) {
             >
               {{ item.answer }}
             </p>
-            <button
-              v-if="shouldShowAnswerToggle(item.answer)"
-              class="feedback-inline-button"
-              type="button"
-              @click="toggleAnswer(item)"
+            <div
+              v-if="isAnswerExpanded(item) && item.sources?.length"
+              class="feedback-source-list"
             >
-              {{ isAnswerExpanded(item) ? "Show less" : "Show more" }}
-            </button>
-            <p class="audit-meta">
-              <span>{{ item.sources?.length || 0 }} sources</span>
-              <span v-if="item.conversation_id">conversation {{ item.conversation_id }}</span>
-              <span v-if="item.sources?.[0]">{{ formatSourceName(item.sources[0].document_id) }}</span>
-            </p>
+              <details
+                v-for="source in item.sources"
+                :key="source.chunk_id || `${source.document_id}-${source.chunk_index}`"
+                class="feedback-source-item"
+              >
+                <summary>
+                  <span class="source-label">[{{ source.label }}]</span>
+                  <span class="source-document" :title="source.document_id || ''">
+                    {{ formatSourceName(source.document_id) }}
+                  </span>
+                  <span class="source-meta-clean">
+                    chunk {{ source.chunk_index }}
+                    <template v-if="formatPageRange(source)"> | {{ formatPageRange(source) }}</template>
+                    | score {{ formatScore(source.score) }}
+                  </span>
+                </summary>
+                <p>{{ source.text || "No snippet text recorded." }}</p>
+              </details>
+            </div>
           </article>
         </div>
         <div v-if="missingDocFeedback.length > pageSize" class="pagination">
