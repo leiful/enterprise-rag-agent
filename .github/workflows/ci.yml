@@ -59,6 +59,7 @@ jobs:
           CHAT_BASE_URL: https://api.deepseek.com
           EMBEDDING_API_KEY: test-embedding-key
           ENABLE_MULTI_QUERY: "false"
+          PYTHONPATH: ..
           CORS_ALLOWED_ORIGINS: http://localhost:5173
           CORS_ALLOW_LOCALHOST_REGEX: "true"
         run: python -m unittest discover -s tests -v
