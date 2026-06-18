@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ai_agent_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required. Run docker compose with --env-file .env.prod or export it in the shell.}
       POSTGRES_DB: ai_agent
     volumes:
       - ai_agent_postgres_data:/var/lib/postgresql/data

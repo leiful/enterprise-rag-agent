@@ -138,8 +138,10 @@ npm.cmd run build
 3. 返回项目根目录并启动生产栈
 
 ```powershell
-docker compose -f compose.prod.yml up -d
+docker compose --env-file .env.prod -f compose.prod.yml up -d
 ```
+
+`--env-file .env.prod` 很重要：`compose.prod.yml` 中的 `${POSTGRES_PASSWORD}` 需要由 Docker Compose 在解析阶段读取。`backend` 服务的 `env_file` 只负责把变量传进后端容器，不能替代 Compose 解析阶段的变量插值。
 
 `compose.prod.yml` 当前包含：
 

@@ -201,7 +201,7 @@ npm.cmd run build
 
 ## 生产部署概览
 
-- 使用 `docker compose -f compose.prod.yml up -d` 启动生产栈。
+- 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈。
 - 部署前先构建前端产物 `frontend/dist/`。
 - 生产环境使用项目根目录的 `.env.prod` 注入后端与数据库变量。
 - 建议通过 HTTPS 和同源部署方式提供前后端服务。

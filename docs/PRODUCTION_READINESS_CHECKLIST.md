@@ -13,6 +13,7 @@
 - 不要把真实密钥放进 `frontend/.env`，因为 `VITE_` 变量会被打包进浏览器代码。
 - 确保 `.env` 不进入 Git，也不要暴露在公开静态托管目录中。
 - 运行 `python scripts/preflight_prod_check.py --env-file .env.prod`，确认没有错误。
+- 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈，避免 Compose 解析阶段读不到 `${POSTGRES_PASSWORD}`。
 
 ## HTTPS、Cookie 与 CORS
 
