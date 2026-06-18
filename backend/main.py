@@ -21,6 +21,7 @@ from config import (
 from config import validate_runtime_config
 from database import (
     backfill_model_usage_scopes,
+    close_pool,
     create_session as save_session,
     init_db,
 )
@@ -49,9 +50,20 @@ rag_eval_suite_list = operations.rag_eval_suite_list
 def startup():
     configure_logging()
     app_state.config_issues = validate_runtime_config()
-    init_db()
-    backfill_model_usage_scopes()
-    knowledge_sources.ensure_default_local_source()
+
+    try:
+        init_db()
+        backfill_model_usage_scopes()
+        knowledge_sources.ensure_default_local_source()
+    except Exception as error:
+        app_state.startup_error = str(error)
+        log_event(
+            logger,
+            40,
+            "app_startup_db_failed",
+            error=str(error),
+        )
+        return
 
     try:
         app_state.client = create_client()
@@ -79,6 +91,7 @@ def startup():
 async def lifespan(app):
     startup()
     yield
+    close_pool()
 
 
 def add_security_headers(response):

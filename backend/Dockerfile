@@ -10,7 +10,7 @@ FROM docker.m.daocloud.io/library/python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    APP_WORKERS=4 \
+    APP_WORKERS=1 \
     PYTHONPATH=/app/deps
 
 RUN addgroup --system --gid 1001 appgroup \

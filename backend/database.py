@@ -10,11 +10,35 @@ from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from config import APP_PASSWORD, APP_USERNAME, DATABASE_CONNECT_TIMEOUT_SECONDS, DATABASE_URL
 
 
 PBKDF2_ITERATIONS = 600_000
+
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        _require_database_url()
+        _pool = ConnectionPool(
+            DATABASE_URL,
+            min_size=2,
+            max_size=10,
+            timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
+            kwargs={"row_factory": dict_row, "connect_timeout": DATABASE_CONNECT_TIMEOUT_SECONDS},
+        )
+    return _pool
+
+
+def close_pool():
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
 
 
 def utc_now_iso():
@@ -28,20 +52,14 @@ def _require_database_url():
 
 @contextmanager
 def connect():
-    _require_database_url()
-    connection = psycopg.connect(
-        DATABASE_URL,
-        row_factory=dict_row,
-        connect_timeout=DATABASE_CONNECT_TIMEOUT_SECONDS,
-    )
-    try:
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+    pool = _get_pool()
+    with pool.connection() as connection:
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
 
 
 def execute_script(connection, script):
