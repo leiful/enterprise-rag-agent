@@ -50,7 +50,15 @@ jobs:
         working-directory: backend
         env:
           TEST_DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/ai_agent_test
-          APP_ENV: testing
+          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/ai_agent_test
+          APP_ENV: test
+          APP_USERNAME: admin
+          APP_PASSWORD: strong-test-password
+          DEEPSEEK_API_KEY: test-key
+          CHAT_MODEL: test-chat-model
+          CHAT_BASE_URL: https://api.deepseek.com
+          EMBEDDING_API_KEY: test-embedding-key
+          ENABLE_MULTI_QUERY: "false"
           CORS_ALLOWED_ORIGINS: http://localhost:5173
           CORS_ALLOW_LOCALHOST_REGEX: "true"
         run: python -m unittest discover -s tests -v
