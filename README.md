@@ -199,6 +199,31 @@ npm.cmd test
 npm.cmd run build
 ```
 
+## CI/CD 与镜像发布
+
+项目使用 GitHub Actions 作为主 CI。默认流程会在 `main` 分支 push 和 pull request 时运行：
+
+- 后端 unittest
+- 前端测试
+- 前端构建
+- 后端 Docker 镜像构建
+
+当代码 push 到 `main` 且上述步骤全部通过后，CI 会将后端镜像推送到腾讯云 TCR 个人版镜像仓库：
+
+```text
+ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
+ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:<git-sha>
+```
+
+启用镜像推送需要在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
+
+```text
+TCR_USERNAME=你的腾讯云账号 ID
+TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
+```
+
+这些密钥只存放在 GitHub Secrets 中，不应写入仓库文件。未配置这些 Secrets 时，普通 clone、本地开发和手动部署不受影响；fork 项目后如需发布到自己的镜像仓库，请调整 `.github/workflows/ci.yml` 中的镜像仓库地址和对应 Secrets。
+
 ## 生产部署概览
 
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈。

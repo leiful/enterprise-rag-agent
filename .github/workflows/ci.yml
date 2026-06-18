@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+env:
+  TCR_REGISTRY: ccr.ccs.tencentyun.com
+  TCR_NAMESPACE: enterprise-rag-agent
+  IMAGE_NAME: enterprise-rag-agent
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -67,4 +75,19 @@ jobs:
         run: npm run build
 
       - name: Build Docker image
-        run: docker build -f backend/Dockerfile -t enterprise-rag-agent:ci .
+        run: |
+          IMAGE="$TCR_REGISTRY/$TCR_NAMESPACE/$IMAGE_NAME"
+          docker build -f backend/Dockerfile -t "$IMAGE:ci" .
+
+      - name: Login to Tencent Cloud TCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: echo "${{ secrets.TCR_PASSWORD }}" | docker login "$TCR_REGISTRY" --username "${{ secrets.TCR_USERNAME }}" --password-stdin
+
+      - name: Push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE="$TCR_REGISTRY/$TCR_NAMESPACE/$IMAGE_NAME"
+          docker tag "$IMAGE:ci" "$IMAGE:latest"
+          docker tag "$IMAGE:ci" "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
