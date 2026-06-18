@@ -1,0 +1,27 @@
+version: '1.0'
+name: master-pipeline
+displayName: CI Pipeline
+stages:
+  - stage:
+    name: test
+    displayName: 测试
+    steps:
+      - step: build@maven
+        name: run_tests
+        displayName: 运行测试
+        jdkVersion: 8
+        mavenVersion: 3.3.9
+        commands:
+          - apt-get update -qq && apt-get install -y -qq python3 python3-pip nodejs npm > /dev/null 2>&1
+          - pip3 install -r backend/requirements.txt
+          - cd backend && python3 -m unittest discover -s tests -v && cd ..
+          - cd frontend && npm ci && npm test && npm run build && cd ..
+        artifacts:
+          - name: BUILD_ARTIFACT
+            path:
+              - ./frontend/dist
+triggers:
+  push:
+    branches:
+      include:
+        - main
