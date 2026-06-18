@@ -1,0 +1,4 @@
+services:
+  backend:
+    image: ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
+    build: !reset null
