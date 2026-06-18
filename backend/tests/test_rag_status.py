@@ -20,10 +20,11 @@ class RagStatusTests(unittest.TestCase):
                                 with patch("routes.operations.get_bm25_stats", return_value={"total_docs": 2, "avg_doc_len": 8.5}):
                                     with patch("routes.operations.count_knowledge_access_audit", return_value=3):
                                         with patch("routes.operations.count_admin_audit_events", return_value=5):
-                                            with patch("routes.operations.summarize_rag_feedback", return_value={"total": 4, "positive": 1, "negative": 3, "by_type": {}}):
-                                                with patch("routes.operations.summarize_model_usage", return_value={"totals": {}, "by_model": []}):
-                                                    with patch("routes.operations.latest_rag_eval_report", return_value={"available": False}):
-                                                        data = operations.get_rag_operational_status()
+                                            with patch("routes.operations.count_active_sessions", return_value=2):
+                                                with patch("routes.operations.summarize_rag_feedback", return_value={"total": 4, "positive": 1, "negative": 3, "by_type": {}}):
+                                                    with patch("routes.operations.summarize_model_usage", return_value={"totals": {}, "by_model": []}):
+                                                        with patch("routes.operations.latest_rag_eval_report", return_value={"available": False}):
+                                                            data = operations.get_rag_operational_status()
 
         self.assertEqual(data["status"], "degraded")
         self.assertEqual(data["documents"]["count"], 1)
@@ -37,6 +38,7 @@ class RagStatusTests(unittest.TestCase):
         self.assertIn("ocr_available", data["parsing"])
         self.assertEqual(data["audit"]["event_count"], 3)
         self.assertEqual(data["audit"]["admin_event_count"], 5)
+        self.assertEqual(data["active_users"], 2)
         self.assertEqual(data["feedback"]["negative"], 3)
         self.assertEqual(
             {issue["name"] for issue in data["issues"]},

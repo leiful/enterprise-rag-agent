@@ -496,7 +496,7 @@ def delete_session(session_id):
 def count_active_sessions():
     with connect() as connection:
         row = connection.execute(
-            "SELECT COUNT(*) AS cnt FROM sessions WHERE expires_at > %s",
+            "SELECT COUNT(DISTINCT user_id) AS cnt FROM sessions WHERE expires_at > %s",
             (time.time(),),
         ).fetchone()
     return row["cnt"] if row else 0

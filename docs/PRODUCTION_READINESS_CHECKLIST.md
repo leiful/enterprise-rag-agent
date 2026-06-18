@@ -4,12 +4,15 @@
 
 ## 密钥与环境变量
 
+- 从 `.env.prod.example` 复制服务器本地 `.env.prod`，不要把真实 `.env.prod` 提交到 Git。
 - 设置 `APP_ENV=production`。
 - 为 `APP_USERNAME` 和 `APP_PASSWORD` 设置足够强的值。
+- 确保 `POSTGRES_PASSWORD` 和 `DATABASE_URL` 中的数据库密码一致。
 - 只在后端运行环境中设置 `DEEPSEEK_API_KEY`。
 - 只在后端运行环境中设置 `EMBEDDING_API_KEY`。
 - 不要把真实密钥放进 `frontend/.env`，因为 `VITE_` 变量会被打包进浏览器代码。
 - 确保 `.env` 不进入 Git，也不要暴露在公开静态托管目录中。
+- 运行 `python scripts/preflight_prod_check.py --env-file .env.prod`，确认没有错误。
 
 ## HTTPS、Cookie 与 CORS
 

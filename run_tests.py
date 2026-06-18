@@ -13,6 +13,7 @@ TEST_GROUPS = {
         "test_knowledge_metadata.py",
         "test_knowledge_sources.py",
         "test_memory.py",
+        "test_preflight_prod_check.py",
         "test_rag_eval_gate.py",
         "test_rag_status.py",
         "test_tools.py",

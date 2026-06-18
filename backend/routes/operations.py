@@ -36,6 +36,7 @@ from database import (
     add_admin_audit_event,
     add_knowledge_access_audit,
     connect,
+    count_active_sessions,
     count_admin_audit_events,
     count_knowledge_access_audit,
     create_index_job,
@@ -467,7 +468,7 @@ def get_rag_operational_status():
             "require_document_department": REQUIRE_DOCUMENT_DEPARTMENT,
         },
         "chat_admission": app_state.current_chat_admission_status(),
-        "active_users": database.count_active_sessions(),
+        "active_users": count_active_sessions(),
         "quality": {
             "latest_eval": eval_report.get("summary", {}) if eval_report.get("available") else {},
         },

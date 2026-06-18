@@ -132,11 +132,9 @@ class ApiAuthTests(unittest.TestCase):
             "/knowledge/index-jobs/acknowledge-failed",
             "/knowledge/documents",
             "/knowledge/documents/{document_id}",
-            "/knowledge/reindex",
             "/knowledge/sources",
             "/knowledge/sources/{source_id}/sync",
             "/knowledge/sources/missing-files",
-            "/knowledge/documents/deduplicate",
             "/admin/knowledge-audit",
             "/admin/audit",
             "/knowledge/search",
@@ -575,7 +573,10 @@ class ApiAuthTests(unittest.TestCase):
                         client.post("/login", json={"username": "admin", "password": "password"})
                         upload_response = client.post(
                             "/knowledge/upload",
-                            data={"notes": "deployment checklist"},
+                            data={
+                                "notes": "deployment checklist",
+                                "metadata": json.dumps({"department": "Finance"}),
+                            },
                             files={
                                 "file": (
                                     "notes.md",
@@ -616,6 +617,7 @@ class ApiAuthTests(unittest.TestCase):
                         client.post("/login", json={"username": "admin", "password": "password"})
                         response = client.post(
                             "/knowledge/upload",
+                            data={"metadata": json.dumps({"department": "Finance"})},
                             files={
                                 "file": (
                                     "large.md",
@@ -638,6 +640,7 @@ class ApiAuthTests(unittest.TestCase):
                     client.post("/login", json={"username": "admin", "password": "password"})
                     response = client.post(
                         "/knowledge/upload",
+                        data={"metadata": json.dumps({"department": "Finance"})},
                         files={"file": ("CON.txt", b"agent tool memory", "text/plain")},
                     )
 

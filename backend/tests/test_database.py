@@ -60,6 +60,26 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(session["username"], "admin")
         self.assertEqual(session["expires_at"], 200)
 
+    def test_count_active_sessions_counts_unique_users(self):
+        database.init_db()
+        admin = database.authenticate_user("admin", "password")
+        analyst = database.create_user(
+            "analyst",
+            "strong-password-123",
+            "user",
+            departments=["Finance"],
+        )
+
+        database.create_session("admin-session-1", admin["id"], expires_at=200)
+        database.create_session("admin-session-2", admin["id"], expires_at=200)
+        database.create_session("analyst-session-1", analyst["id"], expires_at=200)
+        database.create_session("expired-session", analyst["id"], expires_at=50)
+
+        with patch.object(database.time, "time", return_value=100):
+            active_users = database.count_active_sessions()
+
+        self.assertEqual(active_users, 2)
+
     def test_expired_session_is_removed(self):
         database.init_db()
         user = database.authenticate_user("admin", "password")

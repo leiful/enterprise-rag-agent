@@ -80,23 +80,45 @@ VITE_API_BASE=
 
 ### 生产后端配置
 
-生产环境建议在项目根目录使用 `.env.prod`，至少应包含：
+生产环境建议在服务器项目目录创建 `.env.prod`。最小生产配置以 `.env.prod.example` 为准：
 
 ```env
-POSTGRES_PASSWORD=replace_with_production_db_password
-APP_ENV=production
 DEEPSEEK_API_KEY=replace_with_real_deepseek_api_key
+CHAT_MODEL=deepseek-v4-flash
+CHAT_BASE_URL=https://api.deepseek.com
 EMBEDDING_API_KEY=replace_with_real_embedding_api_key
-DATABASE_URL=postgresql://ai_agent_user:replace_with_production_db_password@postgres:5432/ai_agent
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+APP_ENV=production
 APP_USERNAME=admin
 APP_PASSWORD=replace_with_a_strong_production_password
+POSTGRES_PASSWORD=replace_with_production_db_password
+DATABASE_URL=postgresql://ai_agent_user:replace_with_production_db_password@postgres:5432/ai_agent
+VECTOR_STORE_BACKEND=chroma
+CHROMA_COLLECTION_NAME=agent_knowledge
+CHROMA_PERSIST_DIR=/app/chroma_db
+DEFAULT_KNOWLEDGE_SOURCE_PATH=/app/knowledge_files
 SESSION_COOKIE_SECURE=true
 SESSION_COOKIE_SAMESITE=lax
 CORS_ALLOWED_ORIGINS=https://your-frontend-domain.example
 CORS_ALLOW_LOCALHOST_REGEX=false
 ```
 
-如果生产环境要运行测试或额外维护工具，再按需补充其他变量。
+首次上线通常只需要替换 2 个 API key、管理员密码、数据库密码和生产域名。`POSTGRES_PASSWORD` 和 `DATABASE_URL` 中的数据库密码必须一致。
+
+RAG、并发、rerank、分块和缓存等高级参数在 `backend/config.py` 中已有默认值。只有在生产压测或评测结果明确需要调优时，再把对应变量加入 `.env.prod`。
+
+上线前可运行生产配置检查：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\preflight_prod_check.py --env-file .env.prod
+```
+
+Linux 服务器可使用：
+
+```bash
+python scripts/preflight_prod_check.py --env-file .env.prod
+```
 
 ### 生产启动流程
 
@@ -107,7 +129,13 @@ cd frontend
 npm.cmd run build
 ```
 
-2. 返回项目根目录并启动生产栈
+2. 检查生产配置
+
+```powershell
+.\.venv\Scripts\python.exe scripts\preflight_prod_check.py --env-file .env.prod
+```
+
+3. 返回项目根目录并启动生产栈
 
 ```powershell
 docker compose -f compose.prod.yml up -d
@@ -118,6 +146,24 @@ docker compose -f compose.prod.yml up -d
 - `postgres`
 - `backend`
 - `nginx`
+
+### HTTPS 初始化与续期
+
+生产环境建议先完成域名 DNS 解析，让域名指向服务器公网 IP，并确认 80 和 443 端口可访问。
+
+首次申请 Let's Encrypt 证书：
+
+```bash
+bash init-ssl.sh your-domain.com
+```
+
+脚本会先用 HTTP-only nginx 暴露 ACME challenge 目录，申请证书后把 `nginx-ssl.conf` 中的 `YOUR_DOMAIN` 替换为真实域名并写入 `nginx.conf`，然后重启 nginx。完成后访问入口应为：
+
+```text
+https://your-domain.com
+```
+
+证书续期需要在服务器 crontab 中加入脚本输出的 renew 命令。续期后重启 nginx 才会加载新证书。
 
 ## 推荐部署边界
 
