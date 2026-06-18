@@ -22,7 +22,8 @@ class FakeEmbeddingClient:
 
     def embed_one(self, text):
         tokens = text.lower().replace(".", " ").replace(",", " ").split()
-        return [tokens.count(token) for token in self.vocabulary]
+        raw = [tokens.count(token) for token in self.vocabulary]
+        return raw + [0.0] * (1024 - len(raw))
 
 
 class VectorStoreTests(unittest.TestCase):

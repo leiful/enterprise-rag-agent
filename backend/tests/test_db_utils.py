@@ -57,7 +57,7 @@ def reset_test_database():
         )
 
 
-def fake_chroma_similarity_search(query, top_k, embedding_client):
+def fake_vector_similarity_search(query, top_k, embedding_client):
     query_embedding = embedding_client.embed([query])[0]
     with database.connect() as connection:
         rows = connection.execute(
