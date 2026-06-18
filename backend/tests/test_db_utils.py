@@ -91,14 +91,6 @@ def patched_postgres_database(username="admin", password="password"):
         patch.object(database, "APP_PASSWORD", password),
         patch.object(main, "APP_USERNAME", username),
         patch.object(main, "APP_PASSWORD", password),
-        patch.object(vector_store, "VECTOR_STORE_BACKEND", "chroma"),
-        patch.object(vector_store.langchain_chroma_store, "replace_document_chunks"),
-        patch.object(vector_store.langchain_chroma_store, "delete_document_chunks"),
-        patch.object(
-            vector_store.langchain_chroma_store,
-            "similarity_search",
-            side_effect=fake_chroma_similarity_search,
-        ),
     ]
     started = []
     try:

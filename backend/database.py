@@ -101,6 +101,8 @@ def init_db():
         execute_script(
             connection,
             """
+            CREATE EXTENSION IF NOT EXISTS vector;
+
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
@@ -139,16 +141,13 @@ def init_db():
                 document_id TEXT NOT NULL,
                 chunk_index INTEGER NOT NULL,
                 text TEXT NOT NULL,
-                embedding_json TEXT NOT NULL,
+                embedding vector(1024) NOT NULL,
                 metadata_json TEXT NOT NULL DEFAULT '{}',
                 content_hash TEXT NOT NULL,
                 token_count INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
-
-            ALTER TABLE vector_chunks
-            ADD COLUMN IF NOT EXISTS metadata_json TEXT NOT NULL DEFAULT '{}';
 
             CREATE INDEX IF NOT EXISTS idx_vector_chunks_document_id
             ON vector_chunks(document_id);

@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: docker.m.daocloud.io/library/postgres:16
+    image: docker.m.daocloud.io/pgvector/pgvector:pg16
     container_name: ai-agent-postgres
     restart: unless-stopped
     environment:

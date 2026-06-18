@@ -84,11 +84,7 @@ SEMANTIC_CHUNK_MIN_TEXT_LENGTH = int(os.environ.get("SEMANTIC_CHUNK_MIN_TEXT_LEN
 SEMANTIC_CHUNK_MIN_UNITS = int(os.environ.get("SEMANTIC_CHUNK_MIN_UNITS", "6"))
 SEMANTIC_CHUNK_SOFT_RATIO = float(os.environ.get("SEMANTIC_CHUNK_SOFT_RATIO", "0.75"))
 SEMANTIC_BOUNDARY_STD_FACTOR = float(os.environ.get("SEMANTIC_BOUNDARY_STD_FACTOR", "0.85"))
-VECTOR_STORE_BACKEND = os.environ.get("VECTOR_STORE_BACKEND", "chroma").strip().lower()
-CHROMA_PERSIST_DIR = Path(
-    os.environ.get("CHROMA_PERSIST_DIR", str(PROJECT_ROOT / "chroma_db"))
-).resolve()
-CHROMA_COLLECTION_NAME = os.environ.get("CHROMA_COLLECTION_NAME", "agent_knowledge").strip()
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 DEFAULT_KNOWLEDGE_SOURCE_PATH = Path(
     os.environ.get("DEFAULT_KNOWLEDGE_SOURCE_PATH", str(PROJECT_ROOT / "knowledge_files"))
 ).resolve()
@@ -220,21 +216,12 @@ def validate_runtime_config():
             "Embedding API key is missing; knowledge indexing and vector search will fail.",
         ))
 
-    if VECTOR_STORE_BACKEND != "chroma":
+    if EMBEDDING_DIM <= 0:
         issues.append(_config_issue(
-            "VECTOR_STORE_BACKEND",
+            "EMBEDDING_DIM",
             "error",
-            "Vector store backend must be 'chroma'.",
+            "EMBEDDING_DIM must be greater than 0.",
         ))
-
-    if VECTOR_STORE_BACKEND == "chroma":
-        if not CHROMA_COLLECTION_NAME:
-            issues.append(_config_issue(
-                "CHROMA_COLLECTION_NAME",
-                "error",
-                "Chroma collection name is not configured.",
-            ))
-        issues.extend(_check_path_parent(str(CHROMA_PERSIST_DIR), "CHROMA_PERSIST_DIR", "Chroma persist directory"))
 
     issues.extend(_check_path_parent(
         str(DEFAULT_KNOWLEDGE_SOURCE_PATH),

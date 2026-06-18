@@ -11,12 +11,11 @@ from threading import Lock
 from openai import OpenAI
 
 import database
-import langchain_chroma_store
 from app_logging import request_id_var
 from config import (
-    CHROMA_COLLECTION_NAME,
     EMBEDDING_API_KEY,
     EMBEDDING_BASE_URL,
+    EMBEDDING_DIM,
     EMBEDDING_MODEL,
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
@@ -26,7 +25,6 @@ from config import (
     SEMANTIC_BOUNDARY_STD_FACTOR,
     SEMANTIC_CHUNK_MIN_UNITS,
     SEMANTIC_CHUNK_SOFT_RATIO,
-    VECTOR_STORE_BACKEND,
 )
 from model_usage import record_model_usage
 
@@ -55,17 +53,6 @@ class SearchResult:
     text: str
     metadata: dict = field(default_factory=dict)
 
-
-def _use_chroma_backend():
-    return True
-
-
-def _ensure_supported_backend():
-    if VECTOR_STORE_BACKEND != "chroma":
-        raise ValueError(
-            "Unsupported VECTOR_STORE_BACKEND. Expected 'chroma', "
-            f"got {VECTOR_STORE_BACKEND!r}."
-        )
 
 
 def _cache_get(cache, key):
@@ -97,7 +84,6 @@ def clear_runtime_caches():
         _BM25_SEARCH_CACHE.clear()
         _HYBRID_SEARCH_CACHE.clear()
         _METADATA_CACHE.clear()
-    langchain_chroma_store.clear_store_cache()
 
 
 def _clone_results(results):
@@ -586,15 +572,10 @@ def cosine_similarity(vector_a, vector_b):
 
 
 def init_vector_store():
-    _ensure_supported_backend()
     database.init_db()
-    if _use_chroma_backend():
-        # Fail fast on startup when the user enables the Chroma backend.
-        langchain_chroma_store.ensure_langchain_chroma_available()
 
 
 def delete_document(document_id):
-    _ensure_supported_backend()
     chunk_ids = []
     with database.connect() as connection:
         rows = connection.execute(
@@ -614,12 +595,6 @@ def delete_document(document_id):
         connection.execute(
             "DELETE FROM knowledge_documents WHERE document_id = %s",
             (document_id,),
-        )
-
-    if _use_chroma_backend():
-        langchain_chroma_store.delete_document_chunks(
-            document_id,
-            EmbeddingClient(),
         )
 
     database.update_bm25_stats()
@@ -667,7 +642,6 @@ def upsert_document_segments(
     chunk_size=DEFAULT_CHUNK_SIZE,
     chunk_overlap=DEFAULT_CHUNK_OVERLAP,
 ):
-    _ensure_supported_backend()
     embedding_client = embedding_client or EmbeddingClient()
     chunks, chunk_metadatas = split_segments(
         segments,
@@ -676,8 +650,7 @@ def upsert_document_segments(
         embedding_client=embedding_client,
     )
 
-    use_chroma_backend = _use_chroma_backend()
-    embeddings = embedding_client.embed(chunks) if chunks and not use_chroma_backend else []
+    embeddings = embedding_client.embed(chunks) if chunks else []
     now = database.utc_now_iso()
 
     old_chunk_ids = []
@@ -691,21 +664,20 @@ def upsert_document_segments(
     for chunk_id in old_chunk_ids:
         database.delete_bm25_for_chunk(chunk_id)
     
-    stored_embeddings = embeddings if embeddings else [None] * len(chunks)
-
     with database.connect() as connection:
         connection.execute(
             "DELETE FROM vector_chunks WHERE document_id = %s",
             (document_id,),
         )
 
-        for index, (chunk, embedding) in enumerate(zip(chunks, stored_embeddings)):
+        for index, chunk in enumerate(chunks):
             chunk_id = f"{document_id}_chunk_{index:04d}"
             chunk_metadata = chunk_metadatas[index] if index < len(chunk_metadatas) else {}
             
             tokens = tokenize(chunk)
             token_count = len(tokens)
             
+            embedding = embeddings[index] if index < len(embeddings) else []
             connection.execute(
                 """
                 INSERT INTO vector_chunks (
@@ -713,21 +685,21 @@ def upsert_document_segments(
                     document_id,
                     chunk_index,
                     text,
-                    embedding_json,
+                    embedding,
                     metadata_json,
                     content_hash,
                     token_count,
                     created_at,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
                 """,
                 (
                     chunk_id,
                     document_id,
                     index,
                     chunk,
-                    json.dumps(embedding if embedding is not None else []),
+                    json.dumps(embedding),
                     json.dumps(chunk_metadata, ensure_ascii=False),
                     content_hash(chunk),
                     token_count,
@@ -738,14 +710,6 @@ def upsert_document_segments(
             
             database.add_bm25_for_chunk(chunk_id, tokens, connection=connection)
 
-    if use_chroma_backend:
-        langchain_chroma_store.replace_document_chunks(
-            document_id,
-            chunks,
-            embedding_client,
-            chunk_metadatas=chunk_metadatas,
-        )
-    
     database.update_bm25_stats()
     clear_runtime_caches()
 
@@ -809,60 +773,39 @@ def _format_document_row(row):
 
 
 def search(query, top_k=3, embedding_client=None):
-    _ensure_supported_backend()
-    cache_key = (VECTOR_STORE_BACKEND, query, top_k, EMBEDDING_MODEL, CHROMA_COLLECTION_NAME)
+    cache_key = (query, top_k, EMBEDDING_MODEL)
     cached_results = _cache_get(_VECTOR_SEARCH_CACHE, cache_key)
     if cached_results is not None:
         return _clone_results(cached_results)
 
     embedding_client = embedding_client or EmbeddingClient()
-    if _use_chroma_backend():
-        top_results = [
-            SearchResult(
-                score=result["score"],
-                chunk_id=result["chunk_id"],
-                document_id=result["document_id"],
-                chunk_index=result["chunk_index"],
-                text=result["text"],
-                metadata=result.get("metadata", {}),
-            )
-            for result in langchain_chroma_store.similarity_search(
-                query,
-                top_k,
-                embedding_client,
-            )
-        ]
-        _cache_set(_VECTOR_SEARCH_CACHE, cache_key, _clone_results(top_results))
-        return top_results
-
     query_embedding = embedding_client.embed([query])[0]
 
     with database.connect() as connection:
         rows = connection.execute(
             """
-            SELECT id, document_id, chunk_index, text, embedding_json, metadata_json
+            SELECT id, document_id, chunk_index, text,
+                   1 - (embedding <=> %s::vector) AS score,
+                   metadata_json
             FROM vector_chunks
-            """
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+            """,
+            (json.dumps(query_embedding), json.dumps(query_embedding), top_k),
         ).fetchall()
 
-    results = []
-    for row in rows:
-        row_data = dict(row)
-        embedding = json.loads(row["embedding_json"])
-        score = cosine_similarity(query_embedding, embedding)
-        results.append(
-            SearchResult(
-                score=score,
-                chunk_id=row["id"],
-                document_id=row["document_id"],
-                chunk_index=row["chunk_index"],
-                text=row["text"],
-                metadata=_parse_metadata_json(row_data.get("metadata_json")),
-            )
+    top_results = [
+        SearchResult(
+            score=row["score"],
+            chunk_id=row["id"],
+            document_id=row["document_id"],
+            chunk_index=row["chunk_index"],
+            text=row["text"],
+            metadata=_parse_metadata_json(row.get("metadata_json")),
         )
+        for row in rows
+    ]
 
-    results.sort(key=lambda result: result.score, reverse=True)
-    top_results = results[:top_k]
     _cache_set(_VECTOR_SEARCH_CACHE, cache_key, _clone_results(top_results))
     return top_results
 
@@ -1010,7 +953,7 @@ def _who_query_subject(query):
 
 
 def hybrid_search(query, top_k=3, bm25_weight=0.5, vector_weight=0.5):
-    cache_key = (VECTOR_STORE_BACKEND, query, top_k, bm25_weight, vector_weight)
+    cache_key = (query, top_k, bm25_weight, vector_weight)
     cached_results = _cache_get(_HYBRID_SEARCH_CACHE, cache_key)
     if cached_results is not None:
         return _clone_results(cached_results)

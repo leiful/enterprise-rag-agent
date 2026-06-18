@@ -18,9 +18,6 @@ REQUIRED_KEYS = {
     "SESSION_COOKIE_SAMESITE",
     "POSTGRES_PASSWORD",
     "DATABASE_URL",
-    "VECTOR_STORE_BACKEND",
-    "CHROMA_COLLECTION_NAME",
-    "CHROMA_PERSIST_DIR",
     "DEFAULT_KNOWLEDGE_SOURCE_PATH",
     "CORS_ALLOWED_ORIGINS",
     "CORS_ALLOW_LOCALHOST_REGEX",
@@ -136,12 +133,6 @@ def check_env_values(values):
     db_password = database_url_password(values.get("DATABASE_URL", ""))
     if postgres_password and db_password and postgres_password != db_password:
         errors.append("POSTGRES_PASSWORD must match the password in DATABASE_URL.")
-
-    if values.get("VECTOR_STORE_BACKEND", "").lower() != "chroma":
-        errors.append("VECTOR_STORE_BACKEND must be chroma.")
-
-    if values.get("CHROMA_PERSIST_DIR", "").startswith(("http://", "https://")):
-        errors.append("CHROMA_PERSIST_DIR must be a container filesystem path, not a URL.")
 
     if values.get("DEFAULT_KNOWLEDGE_SOURCE_PATH", "").startswith(("http://", "https://")):
         errors.append("DEFAULT_KNOWLEDGE_SOURCE_PATH must be a container filesystem path, not a URL.")
