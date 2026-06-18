@@ -11,6 +11,7 @@ from AI_agent import create_client
 import app_state
 import dependencies as auth_dependencies
 from config import (
+    APP_ENV,
     APP_PASSWORD,
     APP_USERNAME,
     SESSION_MAX_AGE_SECONDS,
@@ -87,7 +88,13 @@ def add_security_headers(response):
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
 
-app = FastAPI(title="AI Tool Calling Agent", lifespan=lifespan)
+app = FastAPI(
+    title="AI Tool Calling Agent",
+    lifespan=lifespan,
+    docs_url=None if APP_ENV == "production" else "/docs",
+    redoc_url=None if APP_ENV == "production" else "/redoc",
+    openapi_url=None if APP_ENV == "production" else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,

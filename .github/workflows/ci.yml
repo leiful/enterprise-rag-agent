@@ -13,6 +13,7 @@ env:
   TCR_REGISTRY: ccr.ccs.tencentyun.com
   TCR_NAMESPACE: enterprise-rag-agent
   IMAGE_NAME: enterprise-rag-agent
+  FRONTEND_IMAGE_NAME: nginx-frontend
 
 jobs:
   test:
@@ -83,10 +84,15 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Build Docker image
+      - name: Build backend Docker image
         run: |
           IMAGE="$TCR_REGISTRY/$TCR_NAMESPACE/$IMAGE_NAME"
           docker build -f backend/Dockerfile -t "$IMAGE:ci" .
+
+      - name: Build frontend nginx Docker image
+        run: |
+          FRONTEND_IMAGE="$TCR_REGISTRY/$TCR_NAMESPACE/$FRONTEND_IMAGE_NAME"
+          docker build -f frontend/Dockerfile.nginx -t "$FRONTEND_IMAGE:ci" .
 
       - name: Login to Tencent Cloud TCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
