@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   TCR_REGISTRY: ccr.ccs.tencentyun.com
@@ -130,22 +129,3 @@ jobs:
           tags: ${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ env.FRONTEND_IMAGE_NAME }}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Login to Tencent Cloud TCR
-        run: echo "${{ secrets.TCR_PASSWORD }}" | docker login "${{ env.TCR_REGISTRY }}" --username "${{ secrets.TCR_USERNAME }}" --password-stdin
-
-      - name: Push backend Docker image
-        run: |
-          IMAGE="${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ env.IMAGE_NAME }}"
-          docker tag "$IMAGE:ci" "$IMAGE:latest"
-          docker tag "$IMAGE:ci" "$IMAGE:${{ github.sha }}"
-          docker push "$IMAGE:latest"
-          docker push "$IMAGE:${{ github.sha }}"
-
-      - name: Push frontend nginx Docker image
-        run: |
-          FRONTEND_IMAGE="${{ env.TCR_REGISTRY }}/${{ env.TCR_NAMESPACE }}/${{ env.FRONTEND_IMAGE_NAME }}"
-          docker tag "$FRONTEND_IMAGE:ci" "$FRONTEND_IMAGE:latest"
-          docker tag "$FRONTEND_IMAGE:ci" "$FRONTEND_IMAGE:${{ github.sha }}"
-          docker push "$FRONTEND_IMAGE:latest"
-          docker push "$FRONTEND_IMAGE:${{ github.sha }}"

@@ -209,7 +209,7 @@ npm.cmd run build
 - 后端 Docker 镜像构建
 - 前端 nginx Docker 镜像构建
 
-当代码 push 到 `main` 且上述步骤全部通过后，CI 会将后端和前端 nginx 镜像推送到腾讯云 TCR 个人版镜像仓库：
+自动 CI 只做验证，不推送镜像。需要发布镜像时，在 GitHub 仓库的 `Actions -> deploy -> Run workflow` 手动触发发布流程。发布流程会将后端和前端 nginx 镜像推送到腾讯云 TCR 个人版镜像仓库：
 
 ```text
 ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
@@ -225,7 +225,7 @@ TCR_USERNAME=你的腾讯云账号 ID
 TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 ```
 
-这些密钥只存放在 GitHub Secrets 中，不应写入仓库文件。未配置这些 Secrets 时，普通 clone、本地开发和手动部署不受影响；fork 项目后如需发布到自己的镜像仓库，请调整 `.github/workflows/ci.yml` 中的镜像仓库地址和对应 Secrets。
+这些密钥只存放在 GitHub Secrets 中，不应写入仓库文件。未配置这些 Secrets 时，普通 clone、本地开发和自动 CI 验证不受影响；fork 项目后如需发布到自己的镜像仓库，请调整 `.github/workflows/deploy.yml` 中的镜像仓库地址和对应 Secrets。
 
 ## 生产部署概览
 
