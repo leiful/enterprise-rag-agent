@@ -50,6 +50,10 @@ textarea {
   border-bottom: 1px solid #e5e7eb;
 }
 
+.toolbar > div:first-child {
+  min-width: 0;
+}
+
 .toolbar h1 {
   margin: 0;
   font-size: 18px;
@@ -124,6 +128,8 @@ textarea {
 .session {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
   gap: 10px;
 }
 
@@ -2315,13 +2321,30 @@ button:disabled {
     width: 100%;
   }
 
+  .toolbar {
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
   .session {
-    align-items: flex-end;
-    flex-direction: column;
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status,
+  .balance-status,
+  .chat-capacity-status,
+  .token-warning-status {
+    height: 30px;
+    padding: 4px 8px;
+    font-size: 12px;
   }
 
   .balance-status {
-    max-width: 180px;
+    max-width: 104px;
   }
 
   .message-sources .source-item summary {

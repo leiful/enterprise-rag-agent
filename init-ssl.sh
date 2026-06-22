@@ -19,6 +19,7 @@ mkdir -p "$CERTBOT_WEBROOT" "$CERTBOT_CONF"
 
 echo ">>> Starting nginx with HTTP-only for ACME challenge..."
 docker compose --env-file .env.prod -f compose.prod.yml up -d nginx
+docker compose --env-file .env.prod -f compose.prod.yml restart nginx
 
 echo ">>> Requesting Let's Encrypt certificate for $DOMAIN ..."
 docker run -it --rm \
