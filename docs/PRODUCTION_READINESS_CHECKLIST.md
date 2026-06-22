@@ -33,7 +33,8 @@
 
 - 在部署 schema 或数据访问逻辑变更前，先备份 PostgreSQL。
 - 在重建或替换索引前，先备份 PostgreSQL 数据库，向量索引存储在 PostgreSQL 的 pgvector 表中。
-- 将 `knowledge_files/`、`logs/` 和 `.env` 放在公开 Web 根目录之外。
+- 将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、知识文件、证书和备份放在 `/data/rag-agent`。
+- 将 `/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/backups`、`logs/` 和 `.env.prod` 放在公开 Web 根目录之外。
 - 后端应作为服务进程运行在反向代理或服务管理器后面。
 
 ## 日志与审计

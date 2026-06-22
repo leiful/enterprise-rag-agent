@@ -232,10 +232,11 @@ TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 - 使用 `docker login ccr.ccs.tencentyun.com` 登录腾讯云 TCR。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml pull` 拉取生产镜像。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈。
-- 生产环境使用项目根目录的 `.env.prod` 注入后端与数据库变量。
+- 生产环境建议将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、知识文件、证书和备份放在 `/data/rag-agent`。
+- 生产环境使用 `/opt/rag-agent/.env.prod` 注入后端与数据库变量。
 - 建议通过 HTTPS 和同源部署方式提供前后端服务。
 - 生产环境应设置 `APP_ENV=production`、`SESSION_COOKIE_SECURE=true`、`CORS_ALLOW_LOCALHOST_REGEX=false`。
-- 不要暴露 `.env`、`knowledge_files/`、`logs/` 或数据库目录。
+- 不要暴露 `.env.prod`、`/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/backups` 或日志目录。
 
 ## 文档导航
 

@@ -117,6 +117,47 @@ Linux 服务器可使用：
 python scripts/preflight_prod_check.py --env-file .env.prod
 ```
 
+### 服务器目录准备
+
+生产环境推荐将部署配置和业务数据分开：
+
+```text
+/opt/rag-agent/              compose、环境变量和 nginx 配置
+/data/rag-agent/postgres/    PostgreSQL 数据目录
+/data/rag-agent/knowledge/   知识库原始文件
+/data/rag-agent/certbot/     Let's Encrypt 证书与 ACME challenge
+/data/rag-agent/backups/     备份输出目录
+```
+
+首次部署前在服务器上创建目录：
+
+```bash
+sudo mkdir -p /opt/rag-agent
+sudo mkdir -p /data/rag-agent/postgres
+sudo mkdir -p /data/rag-agent/knowledge
+sudo mkdir -p /data/rag-agent/certbot/www
+sudo mkdir -p /data/rag-agent/certbot/conf
+sudo mkdir -p /data/rag-agent/backups
+sudo chown -R ubuntu:ubuntu /opt/rag-agent
+sudo chown -R 1001:1001 /data/rag-agent/knowledge
+```
+
+将以下部署文件上传到 `/opt/rag-agent/`：
+
+```text
+compose.prod.yml
+.env.prod
+nginx.conf
+nginx-ssl.conf
+init-ssl.sh
+```
+
+如果 PostgreSQL 首次启动时报告数据目录权限问题，可再执行：
+
+```bash
+sudo chown -R 999:999 /data/rag-agent/postgres
+```
+
 ### 生产启动流程
 
 1. 登录腾讯云 TCR
@@ -142,6 +183,8 @@ docker compose --env-file .env.prod -f compose.prod.yml pull
 ```bash
 docker compose --env-file .env.prod -f compose.prod.yml up -d
 ```
+
+生产部署命令默认在 `/opt/rag-agent` 目录执行。
 
 `--env-file .env.prod` 很重要：`compose.prod.yml` 中的 `${POSTGRES_PASSWORD}` 需要由 Docker Compose 在解析阶段读取。`backend` 服务的 `env_file` 只负责把变量传进后端容器，不能替代 Compose 解析阶段的变量插值。
 
@@ -189,7 +232,7 @@ Internet
 
 - 前端静态资源和 API 走同一域名，降低 Cookie 和 CORS 复杂度。
 - 后端只运行在内网地址或容器网络中，由 nginx 反向代理访问。
-- `knowledge_files/`、日志目录和 `.env` 不放到公开静态目录中。
+- `/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/backups`、日志目录和 `.env.prod` 不放到公开静态目录中。
 - 优先使用 HTTPS。
 
 ## 生产安全基线
