@@ -43,7 +43,6 @@ services:
       - backend_network
     volumes:
       - ./knowledge_files:/app/knowledge_files
-      - ./chroma_db:/app/chroma_db
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
       interval: 30s

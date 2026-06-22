@@ -8,7 +8,7 @@
 ![Backend: FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)
 ![Frontend: Vue%203](https://img.shields.io/badge/frontend-Vue%203-42b883.svg)
 ![Database: PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-336791.svg)
-![Vector Store: Chroma](https://img.shields.io/badge/vector-Chroma-7c3aed.svg)
+![Vector Store: pgvector](https://img.shields.io/badge/vector-pgvector-336791.svg)
 
 ## 快速导航
 
@@ -48,7 +48,7 @@
 - 基于 FastAPI 的后端，提供登录保护的聊天、会话和运维接口。
 - 基于 Vue 3 的前端控制台，覆盖聊天、知识库管理、用户管理、运维面板和 token 监控。
 - 使用 PostgreSQL 存储用户、会话、知识库元数据、审计事件、反馈和模型调用量等结构化数据。
-- 使用 Chroma 做向量持久化，并结合 PostgreSQL 的 chunk 元数据与 BM25 做混合检索。
+- 使用 pgvector 做向量持久化，并结合 PostgreSQL 的 chunk 元数据与 BM25 做混合检索。
 - 支持知识上传、本地知识源同步、索引任务、访问控制、RAG 评测和审计。
 
 ## 适用场景
@@ -69,7 +69,7 @@
 - 后端：FastAPI
 - 前端：Vue 3 + Vite
 - 关系型数据：PostgreSQL
-- 向量存储：Chroma
+- 向量存储：pgvector (PostgreSQL)
 - 检索策略：向量检索 + BM25 + 可选重排
 
 ## 项目结构
@@ -81,7 +81,7 @@ scripts/          RAG 评测与维护脚本
 docs/             部署、架构与生产检查文档
 rag_eval/         评测题目与生成的报告
 knowledge_files/  本地知识源文件目录，已被 Git 忽略
-chroma_db/        本地 Chroma 持久化目录，已被 Git 忽略
+
 compose.yml       开发环境使用的本地 PostgreSQL 服务
 compose.prod.yml  服务器部署使用的 PostgreSQL、后端与 nginx 服务
 run_tests.py      后端 unittest 测试入口
@@ -94,7 +94,7 @@ Browser
   -> Vue 3 frontend
     -> FastAPI backend
       -> PostgreSQL
-      -> Chroma
+      -> pgvector (in PostgreSQL)
       -> Model APIs
       -> knowledge_files/
 ```
@@ -231,7 +231,7 @@ TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 - 生产环境使用项目根目录的 `.env.prod` 注入后端与数据库变量。
 - 建议通过 HTTPS 和同源部署方式提供前后端服务。
 - 生产环境应设置 `APP_ENV=production`、`SESSION_COOKIE_SECURE=true`、`CORS_ALLOW_LOCALHOST_REGEX=false`。
-- 只公开静态前端产物，不要暴露 `.env`、`backend/`、`knowledge_files/`、`chroma_db/`、`logs/` 或数据库目录。
+- 只公开静态前端产物，不要暴露 `.env`、`backend/`、`knowledge_files/`、`logs/` 或数据库目录。
 
 ## 文档导航
 

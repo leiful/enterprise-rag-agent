@@ -23,7 +23,7 @@ WORKDIR /app
 COPY --from=builder /deps /app/deps
 COPY --chown=appuser:appgroup backend /app/backend
 COPY --chown=appuser:appgroup scripts /app/scripts
-RUN mkdir -p /app/logs /app/chroma_db /app/knowledge_files \
+RUN mkdir -p /app/logs /app/knowledge_files \
     && chown -R appuser:appgroup /app
 
 USER appuser

@@ -42,7 +42,7 @@ Create a concise checklist covering:
 
 - Secrets and environment variables.
 - HTTPS, cookies, and CORS.
-- PostgreSQL and Chroma backup boundaries.
+- PostgreSQL (with pgvector) backup boundaries.
 - Logs and audit data.
 - RAG evaluation gates.
 - Deployment and rollback checks.

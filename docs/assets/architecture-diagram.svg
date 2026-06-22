@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
   <title id="title">Enterprise RAG Agent System Architecture</title>
-  <desc id="desc">Architecture diagram showing browser console, FastAPI backend, RAG indexing and query pipelines, PostgreSQL, Chroma, local knowledge files, and model APIs.</desc>
+  <desc id="desc">Architecture diagram showing browser console, FastAPI backend, RAG indexing and query pipelines, PostgreSQL with pgvector, local knowledge files, and model APIs.</desc>
   <defs>
     <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
       <path d="M2,2 L10,6 L2,10 Z" fill="#475569"/>
@@ -70,8 +70,8 @@
   <text x="853" y="184" class="body">metadata, BM25, audit, feedback</text>
 
   <rect x="825" y="262" width="220" height="112" rx="16" class="panel data"/>
-  <text x="853" y="302" class="h2">Chroma</text>
-  <text x="853" y="330" class="body">Vector index and semantic search</text>
+  <text x="835" y="302" class="h2">pgvector</text>
+  <text x="839" y="330" class="body">Vector index in PostgreSQL</text>
 
   <rect x="825" y="410" width="220" height="112" rx="16" class="panel data"/>
   <text x="853" y="450" class="h2">knowledge_files/</text>
@@ -110,7 +110,7 @@
   <path d="M316 620 L346 620" class="line"/>
   <path d="M440 620 L470 620" class="line"/>
   <path d="M564 620 C595 620 608 598 635 565" class="line"/>
-  <text x="98" y="686" class="body">Writes vectors to Chroma, chunk metadata and BM25 postings to PostgreSQL, then records index job status.</text>
+  <text x="98" y="686" class="body">Writes vectors to pgvector, chunk metadata and BM25 postings to PostgreSQL, then records index job status.</text>
 
   <rect x="750" y="495" width="580" height="238" rx="18" class="panel flow"/>
   <text x="778" y="535" class="h2">Query Pipeline</text>

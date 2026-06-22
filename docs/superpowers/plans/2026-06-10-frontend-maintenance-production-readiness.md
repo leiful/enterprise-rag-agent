@@ -84,11 +84,11 @@ Expected: all frontend tests pass.
 
 - [ ] **Step 1: Write the checklist**
 
-Cover environment variables, auth cookies, CORS, database and Chroma backups, logs, RAG evaluation gates, deployment boundaries, and rollback checks.
+Cover environment variables, auth cookies, CORS, database and pgvector backups, logs, RAG evaluation gates, deployment boundaries, and rollback checks.
 
 - [ ] **Step 2: Review for deploy blockers**
 
-Confirm the checklist has no open placeholder text and does not recommend exposing `.env`, `knowledge_files`, `chroma_db`, `logs`, or backend source as static assets.
+Confirm the checklist has no open placeholder text and does not recommend exposing `.env`, `knowledge_files`, `logs`, or backend source as static assets.
 
 ### Task 4: Final Verification
 
