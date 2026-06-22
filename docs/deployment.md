@@ -119,26 +119,33 @@ python scripts/preflight_prod_check.py --env-file .env.prod
 
 ### 生产启动流程
 
-1. 构建前端产物
+1. 登录腾讯云 TCR
 
-```powershell
-cd frontend
-npm.cmd run build
+```bash
+docker login ccr.ccs.tencentyun.com
 ```
 
 2. 检查生产配置
 
-```powershell
-.\.venv\Scripts\python.exe scripts\preflight_prod_check.py --env-file .env.prod
+```bash
+python scripts/preflight_prod_check.py --env-file .env.prod
 ```
 
-3. 返回项目根目录并启动生产栈
+3. 拉取生产镜像
 
-```powershell
+```bash
+docker compose --env-file .env.prod -f compose.prod.yml pull
+```
+
+4. 启动生产栈
+
+```bash
 docker compose --env-file .env.prod -f compose.prod.yml up -d
 ```
 
 `--env-file .env.prod` 很重要：`compose.prod.yml` 中的 `${POSTGRES_PASSWORD}` 需要由 Docker Compose 在解析阶段读取。`backend` 服务的 `env_file` 只负责把变量传进后端容器，不能替代 Compose 解析阶段的变量插值。
+
+`compose.prod.yml` 默认使用 GitHub Actions 推送到腾讯云 TCR 的后端和前端 nginx 镜像，因此服务器不需要安装 Node.js，也不需要在服务器上构建前端产物或应用镜像。
 
 `compose.prod.yml` 当前包含：
 

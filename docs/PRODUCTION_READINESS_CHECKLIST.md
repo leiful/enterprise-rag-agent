@@ -13,6 +13,8 @@
 - 不要把真实密钥放进 `frontend/.env`，因为 `VITE_` 变量会被打包进浏览器代码。
 - 确保 `.env` 不进入 Git，也不要暴露在公开静态托管目录中。
 - 运行 `python scripts/preflight_prod_check.py --env-file .env.prod`，确认没有错误。
+- 使用 `docker login ccr.ccs.tencentyun.com` 登录腾讯云 TCR。
+- 使用 `docker compose --env-file .env.prod -f compose.prod.yml pull` 拉取生产镜像。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈，避免 Compose 解析阶段读不到 `${POSTGRES_PASSWORD}`。
 
 ## HTTPS、Cookie 与 CORS
@@ -30,9 +32,8 @@
 ## 数据边界
 
 - 在部署 schema 或数据访问逻辑变更前，先备份 PostgreSQL。
-- 在重建或替换索引前，先备份向量索引数据（存储在 PostgreSQL 中，通过 pg_dump 备份）。
+- 在重建或替换索引前，先备份 PostgreSQL 数据库，向量索引存储在 PostgreSQL 的 pgvector 表中。
 - 将 `knowledge_files/`、`logs/` 和 `.env` 放在公开 Web 根目录之外。
-- 静态前端只部署 `frontend/dist/`。
 - 后端应作为服务进程运行在反向代理或服务管理器后面。
 
 ## 日志与审计

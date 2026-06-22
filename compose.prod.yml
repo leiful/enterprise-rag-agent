@@ -29,9 +29,7 @@ services:
         max-file: "3"
 
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
     container_name: ai-agent-backend
     restart: unless-stopped
     env_file:
@@ -61,9 +59,7 @@ services:
         max-file: "3"
 
   nginx:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile.nginx
+    image: ccr.ccs.tencentyun.com/enterprise-rag-agent/nginx-frontend:latest
     container_name: ai-agent-nginx
     restart: unless-stopped
     depends_on:

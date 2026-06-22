@@ -207,12 +207,15 @@ npm.cmd run build
 - 前端测试
 - 前端构建
 - 后端 Docker 镜像构建
+- 前端 nginx Docker 镜像构建
 
-当代码 push 到 `main` 且上述步骤全部通过后，CI 会将后端镜像推送到腾讯云 TCR 个人版镜像仓库：
+当代码 push 到 `main` 且上述步骤全部通过后，CI 会将后端和前端 nginx 镜像推送到腾讯云 TCR 个人版镜像仓库：
 
 ```text
 ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
 ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:<git-sha>
+ccr.ccs.tencentyun.com/enterprise-rag-agent/nginx-frontend:latest
+ccr.ccs.tencentyun.com/enterprise-rag-agent/nginx-frontend:<git-sha>
 ```
 
 启用镜像推送需要在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
@@ -226,12 +229,13 @@ TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 
 ## 生产部署概览
 
+- 使用 `docker login ccr.ccs.tencentyun.com` 登录腾讯云 TCR。
+- 使用 `docker compose --env-file .env.prod -f compose.prod.yml pull` 拉取生产镜像。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈。
-- 部署前先构建前端产物 `frontend/dist/`。
 - 生产环境使用项目根目录的 `.env.prod` 注入后端与数据库变量。
 - 建议通过 HTTPS 和同源部署方式提供前后端服务。
 - 生产环境应设置 `APP_ENV=production`、`SESSION_COOKIE_SECURE=true`、`CORS_ALLOW_LOCALHOST_REGEX=false`。
-- 只公开静态前端产物，不要暴露 `.env`、`backend/`、`knowledge_files/`、`logs/` 或数据库目录。
+- 不要暴露 `.env`、`knowledge_files/`、`logs/` 或数据库目录。
 
 ## 文档导航
 

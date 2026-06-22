@@ -1,7 +1,0 @@
-services:
-  backend:
-    image: ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
-    build: !reset null
-  nginx:
-    image: ccr.ccs.tencentyun.com/enterprise-rag-agent/nginx-frontend:latest
-    build: !reset null
