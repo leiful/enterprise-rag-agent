@@ -147,7 +147,7 @@ let cacheCurrentConversation;
 let restoreConversation;
 let openNewChat;
 let openConversation;
-let sendMessageStream;
+let sendMessageWithTyping;
 const authSession = useAuthSession({
   API_BASE,
   refs: state,
@@ -171,7 +171,7 @@ const { checkSession, closeSettingsMenu, loadConversations, login, logout, onDoc
   restoreConversation,
   openNewChat,
   openConversation,
-  sendMessageStream,
+  sendMessageWithTyping,
 } = useChatConversations({
   API_BASE,
   refs: {
@@ -392,7 +392,7 @@ const workspaceBindings = createAppWorkspaceBindings({
   state: { ...state, usageEventsTotalPages, pagedModelUsageEvents },
   modelUsage: modelUsageBindings,
   adminData: adminDataBindings,
-  chat: { openNewChat, openConversation, sendMessageStream },
+  chat: { openNewChat, openConversation, sendMessageWithTyping },
   knowledge: knowledgeBindings,
   users: userBindings,
   feedback: { submitFeedback },

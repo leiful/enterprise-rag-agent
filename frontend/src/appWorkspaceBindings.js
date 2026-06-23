@@ -43,7 +43,7 @@ export function createAppWorkspaceBindings({ state, modelUsage, adminData, chat,
     actions: {
       openNewChat: chat.openNewChat,
       openConversation: chat.openConversation,
-      sendMessageStream: chat.sendMessageStream,
+      sendMessageWithTyping: chat.sendMessageWithTyping,
       submitFeedback: feedback.submitFeedback,
       syncEnabledKnowledgeSources: knowledge.syncEnabledKnowledgeSources,
       clearMissingKnowledgeFiles: knowledge.clearMissingKnowledgeFiles,

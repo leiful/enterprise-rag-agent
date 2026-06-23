@@ -36,7 +36,7 @@ defineProps({
       :format-source-name="b.formatSourceName"
       :format-score="b.formatScore"
       :format-page-range="b.formatPageRange"
-      @send="b.sendMessageStream"
+      @send="b.sendMessageWithTyping"
       @submit-feedback="b.submitFeedback"
     />
 

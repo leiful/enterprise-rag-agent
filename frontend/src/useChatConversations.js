@@ -5,6 +5,7 @@ export function useChatConversations({
   refs,
   loaders,
   helpers,
+  typing = {},
 }) {
   const {
     input,
@@ -22,6 +23,8 @@ export function useChatConversations({
   } = refs;
   const { loadConversations, loadDeepseekBalance } = loaders;
   const { cloneMessages, emptyMessages, normalizeMessages, decodeSourcesHeader } = helpers;
+  const typingDelayMs = typing.delayMs ?? 12;
+  const typingChunkSize = typing.chunkSize ?? 3;
   const conversationMessagesCache = new Map();
   let conversationLoadToken = 0;
 
@@ -170,7 +173,26 @@ export function useChatConversations({
     }
   }
 
-  async function sendMessageStream() {
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function revealAnswer(message, answer) {
+    message.content = "";
+    if (!answer) {
+      return;
+    }
+
+    for (let index = 0; index < answer.length; index += typingChunkSize) {
+      message.content += answer.slice(index, index + typingChunkSize);
+      await scrollMessagesToBottom();
+      if (typingDelayMs > 0 && index + typingChunkSize < answer.length) {
+        await wait(typingDelayMs);
+      }
+    }
+  }
+
+  async function sendMessageWithTyping() {
     const text = input.value.trim();
 
     if (!text || loading.value) {
@@ -179,14 +201,14 @@ export function useChatConversations({
 
     messages.value.push({ role: "user", content: text, created_at: new Date().toISOString() });
     const assistantIndex = messages.value.length;
-    messages.value.push({ role: "assistant", content: "", sources: [], created_at: new Date().toISOString() });
+    messages.value.push({ role: "assistant", content: "思考中...", sources: [], created_at: new Date().toISOString() });
     input.value = "";
     error.value = "";
     loading.value = true;
     await scrollMessagesToBottom();
 
     try {
-      const response = await fetch(`${API_BASE}/chat/stream`, {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -199,48 +221,31 @@ export function useChatConversations({
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Chat API is unavailable. Restart the backend service and try again.");
+        }
         throw new Error(`Request failed with status ${response.status}`);
       }
 
-      const conversationId = Number(response.headers.get("X-Conversation-Id"));
-      if (conversationId) {
-        currentConversationId.value = conversationId;
-        localStorage.setItem("currentConversationId", String(conversationId));
+      const data = await response.json();
+      currentConversationId.value = data.conversation_id;
+      if (data.conversation_id) {
+        localStorage.setItem("currentConversationId", String(data.conversation_id));
         await loadConversations();
       }
 
-      messages.value[assistantIndex].sources = decodeSourcesHeader(
-        response.headers.get("X-Knowledge-Sources"),
-      );
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error("Streaming response is not available.");
-      }
-
-      const decoder = new TextDecoder();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
-
-        messages.value[assistantIndex].content += decoder.decode(value, { stream: true });
-        await scrollMessagesToBottom();
-      }
-
-      const tail = decoder.decode();
-      if (tail) {
-        messages.value[assistantIndex].content += tail;
-        await scrollMessagesToBottom();
-      }
+      messages.value[assistantIndex].sources = data.sources || [];
+      await revealAnswer(messages.value[assistantIndex], data.answer || "");
 
       cacheCurrentConversation();
       await loadConversations();
       await loadDeepseekBalance();
     } catch (err) {
-      messages.value[assistantIndex].content ||= err.message || "Request failed";
-      error.value = err.message || "Request failed";
+      const message = err.message || "Request failed";
+      messages.value[assistantIndex].content = message === "Failed to fetch"
+        ? "请求失败，请稍后重试。"
+        : message;
+      error.value = messages.value[assistantIndex].content;
     } finally {
       loading.value = false;
     }
@@ -267,7 +272,7 @@ export function useChatConversations({
     selectConversation,
     openConversation,
     sendMessage,
-    sendMessageStream,
+    sendMessageWithTyping,
     clearConversationState,
   };
 }
