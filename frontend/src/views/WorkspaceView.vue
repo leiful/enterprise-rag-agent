@@ -32,6 +32,7 @@ defineProps({
       :feedback-options="b.feedbackOptions"
       :feedback-type-label="b.feedbackTypeLabel"
       :has-sources="b.hasSources"
+      :referenced-sources="b.referencedSources"
       :format-date="b.formatDate"
       :format-source-name="b.formatSourceName"
       :format-score="b.formatScore"
