@@ -20,12 +20,17 @@
 - 所有 Markdown 文档使用简体中文；必要英文术语可以保留，但说明文字优先中文。
 - 编辑中文文档或源码前后，按 UTF-8 读取确认内容，不把终端乱码误判为文件损坏。
 - 发现重复流程、常见坑或约束缺失，要沉淀为文档、脚本、Skill、测试或配置。
+- 新增 cron、后台任务、日志、缓存或备份时，必须说明磁盘增长、保留策略、失败可见性和人工检查方式。
 
 ## 3. 文档入口
 
 - 测试、回归、前端发布后 smoke test：读 `docs/testing.md`。
 - 部署、服务器更新、HTTPS、健康检查：读 `docs/deployment.md`。
+- 生产问题排障、日志取证、故障复盘：读 `docs/troubleshooting.md`。
+- 密钥、权限、Cookie、CORS、日志脱敏和生产安全：读 `docs/security.md`。
+- 备份、恢复、数据丢失和自动备份：读 `docs/backup-restore.md`。
 - 架构、模块边界、数据流：读 `docs/architecture.md`。
+- 重要技术选择、长期取舍、升级建议：读 `docs/decisions.md`。
 - 生产就绪检查：读 `docs/PRODUCTION_READINESS_CHECKLIST.md`。
 - 如果新增长流程，优先写入 `docs/`；重复 3 次以上的专项流程再考虑沉淀为 Skill。
 - 如果发现文档、脚本或配置已落后于更好的工程实践，先提出更新建议和取舍，再由用户确认是否沉淀。

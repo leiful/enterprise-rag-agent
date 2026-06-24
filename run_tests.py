@@ -7,6 +7,7 @@ from pathlib import Path
 TEST_GROUPS = {
     "fast": [
         "test_ai_agent.py",
+        "test_backup_prod_data.py",
         "test_config.py",
         "test_document_parsers.py",
         "test_knowledge_access.py",
@@ -17,6 +18,7 @@ TEST_GROUPS = {
         "test_rag_eval_gate.py",
         "test_rag_status.py",
         "test_tools.py",
+        "test_verify_prod_deploy.py",
     ],
     "api": ["test_main_api.py"],
     "database": ["test_database.py", "test_db_utils.py"],

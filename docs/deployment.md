@@ -196,6 +196,76 @@ docker compose --env-file .env.prod -f compose.prod.yml up -d
 - `backend`
 - `nginx`
 
+### 手动更新流程
+
+手动触发 GitHub Actions 的 `deploy` 工作流后，服务器仍需要人工拉取新镜像并重启生产栈。推荐在服务器 `/opt/rag-agent` 目录按以下顺序执行。
+
+1. 记录当前状态，方便失败时对比：
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yml ps
+docker images | grep enterprise-rag-agent
+```
+
+2. 做生产配置预检：
+
+```bash
+python scripts/preflight_prod_check.py --env-file .env.prod
+```
+
+3. 拉取最新镜像：
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yml pull
+```
+
+4. 重启生产栈：
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yml up -d
+```
+
+5. 验证容器状态和健康检查：
+
+```bash
+python scripts/verify_prod_deploy.py
+```
+
+如果服务器生产域名可访问，也可以检查公开健康接口：
+
+```bash
+python scripts/verify_prod_deploy.py --public-url https://your-domain.com
+```
+
+6. 做浏览器 smoke test：
+
+- 登录成功。
+- 聊天页不是空白屏。
+- 最近一条历史会话可以打开。
+- 新提问可以得到回答。
+- 知识库来源展示正常。
+- 浏览器 Console 没有红色运行时错误。
+
+### 更新失败处理
+
+如果 `pull`、`up -d` 或发布后验证失败，先停止继续操作并取证：
+
+```bash
+docker compose --env-file .env.prod -f compose.prod.yml ps
+docker logs ai-agent-backend --tail 200
+docker logs ai-agent-nginx --tail 200
+```
+
+常见处理顺序：
+
+1. 如果是 `.env.prod` 配置错误，先修正配置，再重新运行 `scripts/preflight_prod_check.py`。
+2. 如果是后端不健康，先查 `ai-agent-backend` 日志和 `/health` 返回内容。
+3. 如果是 nginx 不健康，先运行 `docker exec ai-agent-nginx nginx -t` 并检查挂载的 `nginx.conf`。
+4. 如果是新镜像行为异常，临时改回上一版明确 tag 后执行 `docker compose --env-file .env.prod -f compose.prod.yml up -d`。
+5. 修复后重新运行 `scripts/verify_prod_deploy.py` 和浏览器 smoke test。
+
+生产故障完成后，按 `docs/troubleshooting.md` 做复盘，并评估是否需要补测试、脚本、文档或 CI 门禁。
+
 ### HTTPS 初始化与续期
 
 生产环境建议先完成域名 DNS 解析，让域名指向服务器公网 IP，并确认 80 和 443 端口可访问。

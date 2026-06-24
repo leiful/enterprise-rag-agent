@@ -15,6 +15,10 @@
 - 快速开始：从 `环境变量` 到 `启动应用`，适合首次跑通项目
 - 生产部署：查看 `docs/deployment.md`
 - 架构说明：查看 `docs/architecture.md`
+- 测试策略：查看 `docs/testing.md`
+- 排障手册：查看 `docs/troubleshooting.md`
+- 安全手册：查看 `docs/security.md`
+- 备份恢复：查看 `docs/backup-restore.md`
 - 生产检查：查看 `docs/PRODUCTION_READINESS_CHECKLIST.md`
 
 ## 项目亮点
@@ -230,8 +234,11 @@ TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 ## 生产部署概览
 
 - 使用 `docker login ccr.ccs.tencentyun.com` 登录腾讯云 TCR。
+- 使用 `python scripts/preflight_prod_check.py --env-file .env.prod` 做生产配置预检。
+- 使用 `python scripts/backup_prod_data.py` 在重要更新前生成本机备份。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml pull` 拉取生产镜像。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈。
+- 使用 `python scripts/verify_prod_deploy.py` 检查容器和健康状态。
 - 生产环境建议将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、知识文件、证书和备份放在 `/data/rag-agent`。
 - 生产环境使用 `/opt/rag-agent/.env.prod` 注入后端与数据库变量。
 - 建议通过 HTTPS 和同源部署方式提供前后端服务。
@@ -242,6 +249,11 @@ TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 
 - 部署说明：`docs/deployment.md`
 - 架构说明：`docs/architecture.md`
+- 测试指南：`docs/testing.md`
+- 排障手册：`docs/troubleshooting.md`
+- 安全手册：`docs/security.md`
+- 备份恢复：`docs/backup-restore.md`
+- 决策记录：`docs/decisions.md`
 - 生产就绪检查：`docs/PRODUCTION_READINESS_CHECKLIST.md`
 - 资源规范：`docs/assets/README.md`
 
