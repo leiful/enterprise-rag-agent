@@ -8,6 +8,7 @@ import {
   formatPercent,
   formatSourceName,
   formatStatusCount,
+  referencedSources,
   normalizeMessages,
 } from "../formatters.js";
 
@@ -35,6 +36,22 @@ test("formatFileSize uses human readable units", () => {
 
 test("formatSourceName extracts uploaded file names from generated ids", () => {
   assert.equal(formatSourceName("source__policy.pdf"), "policy.pdf");
+});
+
+test("referencedSources keeps only sources cited in the answer text", () => {
+  const message = {
+    content: "第一条依据来自 [K1]，补充步骤见 [K4]。",
+    sources: [
+      { label: "K1", document_id: "manual.pdf" },
+      { label: "K2", document_id: "manual.pdf" },
+      { label: "K4", document_id: "manual.pdf" },
+    ],
+  };
+
+  assert.deepEqual(
+    referencedSources(message).map((source) => source.label),
+    ["K1", "K4"],
+  );
 });
 
 test("normalizeMessages returns an assistant placeholder for empty histories", () => {

@@ -33,6 +33,7 @@ import {
   hasSources,
   isRetrievalOnlyReport,
   lifecycleClass,
+  referencedSources,
 } from "./formatters.js";
 import { feedbackOptions, formatDate } from "./uiHelpers.js";
 
@@ -90,6 +91,7 @@ export function createAppWorkspaceBindings({ state, modelUsage, adminData, chat,
       feedbackTypeLabel,
       feedbackFilterOptions,
       hasSources,
+      referencedSources,
       formatDate,
       formatSourceName,
       formatScore,

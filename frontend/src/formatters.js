@@ -336,6 +336,29 @@ export function hasSources(message) {
   return Array.isArray(message.sources);
 }
 
+export function referencedSourceLabels(content) {
+  const labels = new Set();
+  const text = String(content || "");
+  const citationPattern = /\[([Kk]\d+(?:\s*[,，、]\s*[Kk]\d+)*)\]/g;
+  for (const match of text.matchAll(citationPattern)) {
+    for (const label of match[1].split(/[,，、]/)) {
+      const normalized = label.trim().toUpperCase();
+      if (normalized) {
+        labels.add(normalized);
+      }
+    }
+  }
+  return labels;
+}
+
+export function referencedSources(message) {
+  if (!Array.isArray(message?.sources)) {
+    return [];
+  }
+  const labels = referencedSourceLabels(message.content);
+  return message.sources.filter((source) => labels.has(String(source?.label || "").toUpperCase()));
+}
+
 export function normalizeMessages(rawMessages) {
   const normalized = (rawMessages || []).map((message) => ({
     id: message.id,

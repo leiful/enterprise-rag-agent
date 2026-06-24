@@ -34,6 +34,10 @@ defineProps({
     type: Function,
     required: true,
   },
+  referencedSources: {
+    type: Function,
+    required: true,
+  },
   formatDate: {
     type: Function,
     required: true,
@@ -121,9 +125,9 @@ defineExpose({ scrollToBottom });
           v-if="message.role === 'assistant' && hasSources(message)"
           class="message-sources"
         >
-          <div v-if="message.sources.length" class="source-list">
+          <div v-if="referencedSources(message).length" class="source-list">
             <details
-              v-for="source in message.sources"
+              v-for="source in referencedSources(message)"
               :key="source.chunk_id || `${source.document_id}-${source.chunk_index}`"
               class="source-item"
             >
