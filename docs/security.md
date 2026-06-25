@@ -70,6 +70,7 @@ frontend/src/
 knowledge_files/
 /data/rag-agent/knowledge
 /data/rag-agent/postgres
+/data/rag-agent/milvus
 /data/rag-agent/backups
 logs/
 ```
@@ -77,12 +78,12 @@ logs/
 推荐边界：
 
 - `/opt/rag-agent` 放部署配置。
-- `/data/rag-agent` 放 PostgreSQL、知识文件、证书和备份。
+- `/data/rag-agent` 放 PostgreSQL、Milvus、知识文件、证书和备份。
 - Nginx 只暴露前端静态资源、API 代理和 ACME challenge。
 
 ## 7. 备份与恢复
 
-- 数据库结构、权限、知识索引和向量数据都在 PostgreSQL 中，重要变更前先备份。
+- 数据库结构、权限、chunk 文本、元数据和 BM25 数据在 PostgreSQL 中；向量索引在 Milvus 中，重要变更前先确认是否需要备份或是否可以重建。
 - 备份文件放在非公开目录。
 - 回滚代码前，确认 schema 和索引行为是否兼容。
 - 恢复前先确认目标环境，避免把测试数据覆盖到生产。

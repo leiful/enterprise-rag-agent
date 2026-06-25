@@ -26,13 +26,48 @@ class FakeEmbeddingClient:
         return raw + [0.0] * (1024 - len(raw))
 
 
+class FakeMilvusVectorClient:
+    def __init__(self):
+        self.vectors = {}
+        self.upsert_calls = []
+        self.delete_calls = []
+
+    def upsert_embeddings(self, items):
+        self.upsert_calls.append(list(items))
+        for item in items:
+            self.vectors[item["chunk_id"]] = item["embedding"]
+
+    def delete_embeddings(self, chunk_ids):
+        self.delete_calls.append(list(chunk_ids))
+        for chunk_id in chunk_ids:
+            self.vectors.pop(chunk_id, None)
+
+    def search(self, query_embedding, top_k):
+        results = []
+        for chunk_id, embedding in self.vectors.items():
+            results.append({
+                "chunk_id": chunk_id,
+                "score": vector_store.cosine_similarity(query_embedding, embedding),
+            })
+        results.sort(key=lambda item: item["score"], reverse=True)
+        return results[:top_k]
+
+
 class VectorStoreTests(unittest.TestCase):
     def setUp(self):
         self.database_context = patched_postgres_database()
         self.database_context.__enter__()
         self.embedding_client = FakeEmbeddingClient()
+        self.milvus_client = FakeMilvusVectorClient()
+        self.milvus_patch = patch.object(
+            vector_store,
+            "get_milvus_vector_client",
+            return_value=self.milvus_client,
+        )
+        self.milvus_patch.start()
 
     def tearDown(self):
+        self.milvus_patch.stop()
         self.database_context.__exit__(None, None, None)
 
     def test_upsert_document_stores_chunks(self):
@@ -50,6 +85,12 @@ class VectorStoreTests(unittest.TestCase):
         self.assertEqual(len(chunks), 1)
         self.assertEqual(chunks[0]["id"], "doc-agent_chunk_0000")
         self.assertEqual(chunks[0]["text"], "agent tool memory")
+        self.assertEqual(
+            self.milvus_client.upsert_calls[-1][0]["chunk_id"],
+            "doc-agent_chunk_0000",
+        )
+        self.assertIn("doc-agent_chunk_0000", self.milvus_client.vectors)
+        self.assertNotIn("text", self.milvus_client.upsert_calls[-1][0])
 
     def test_upsert_document_replaces_old_chunks(self):
         vector_store.upsert_document(
@@ -72,6 +113,10 @@ class VectorStoreTests(unittest.TestCase):
 
         self.assertEqual(len(chunks), 1)
         self.assertEqual(chunks[0]["text"], "vector database")
+        self.assertEqual(
+            self.milvus_client.delete_calls[-1],
+            ["doc-agent_chunk_0000"],
+        )
 
     def test_search_returns_most_similar_chunks(self):
         vector_store.upsert_document(
@@ -97,6 +142,7 @@ class VectorStoreTests(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].document_id, "doc-agent")
+        self.assertEqual(results[0].text, "agent tool memory")
         self.assertGreaterEqual(results[0].score, 0)
 
     def test_delete_document_removes_chunks(self):
@@ -111,6 +157,8 @@ class VectorStoreTests(unittest.TestCase):
         vector_store.delete_document("doc-agent")
 
         self.assertEqual(vector_store.list_document_chunks("doc-agent"), [])
+        self.assertEqual(self.milvus_client.delete_calls[-1], ["doc-agent_chunk_0000"])
+        self.assertNotIn("doc-agent_chunk_0000", self.milvus_client.vectors)
 
     def test_list_documents_groups_chunks_by_document(self):
         vector_store.upsert_document(

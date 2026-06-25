@@ -9,7 +9,7 @@ export function useFeedback({
   const { cacheCurrentConversation, loadRagFeedback, loadRagStatus } = loaders;
 
   async function submitFeedback(message, index, feedbackType) {
-    if (!message || message.feedbackLoading || message.feedbackSent) {
+    if (!message || message.feedbackLoading || message.feedbackSent || message.isTyping) {
       return;
     }
 

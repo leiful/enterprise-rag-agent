@@ -101,8 +101,6 @@ def init_db():
         execute_script(
             connection,
             """
-            CREATE EXTENSION IF NOT EXISTS vector;
-
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
@@ -141,7 +139,6 @@ def init_db():
                 document_id TEXT NOT NULL,
                 chunk_index INTEGER NOT NULL,
                 text TEXT NOT NULL,
-                embedding vector(1024) NOT NULL,
                 metadata_json TEXT NOT NULL DEFAULT '{}',
                 content_hash TEXT NOT NULL,
                 token_count INTEGER DEFAULT 0,
@@ -295,6 +292,7 @@ def init_db():
         connection.execute("ALTER TABLE knowledge_source_files ADD COLUMN IF NOT EXISTS owns_index BOOLEAN NOT NULL DEFAULT TRUE")
         connection.execute("ALTER TABLE knowledge_index_jobs ADD COLUMN IF NOT EXISTS acknowledged_at TEXT")
         connection.execute("ALTER TABLE model_usage_events ADD COLUMN IF NOT EXISTS usage_scope TEXT NOT NULL DEFAULT 'other'")
+        connection.execute("ALTER TABLE vector_chunks DROP COLUMN IF EXISTS embedding")
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_model_usage_events_usage_scope ON model_usage_events(usage_scope)"
         )

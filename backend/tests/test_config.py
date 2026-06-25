@@ -101,6 +101,19 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertIn("CHAT_MODEL", issue_names)
         self.assertIn("CHAT_BASE_URL", issue_names)
 
+    def test_validate_runtime_config_requires_milvus_connection_settings(self):
+        with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "model-key"}):
+            with patch.object(config, "APP_USERNAME", "admin"):
+                with patch.object(config, "APP_PASSWORD", "strong-local-password"):
+                    with patch.object(config, "DATABASE_URL", "postgresql://user:pass@localhost:5432/app"):
+                        with patch.object(config, "MILVUS_URI", ""):
+                            with patch.object(config, "MILVUS_COLLECTION", ""):
+                                issues = config.validate_runtime_config()
+
+        issue_names = {issue["name"] for issue in issues if issue["severity"] == "error"}
+        self.assertIn("MILVUS_URI", issue_names)
+        self.assertIn("MILVUS_COLLECTION", issue_names)
+
 
 if __name__ == "__main__":
     unittest.main()

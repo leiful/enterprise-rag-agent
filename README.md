@@ -8,7 +8,7 @@
 ![Backend: FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)
 ![Frontend: Vue%203](https://img.shields.io/badge/frontend-Vue%203-42b883.svg)
 ![Database: PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-336791.svg)
-![Vector Store: pgvector](https://img.shields.io/badge/vector-pgvector-336791.svg)
+![Vector Store: Milvus](https://img.shields.io/badge/vector-Milvus-00A1EA.svg)
 
 ## 快速导航
 
@@ -52,7 +52,7 @@
 - 基于 FastAPI 的后端，提供登录保护的聊天、会话和运维接口。
 - 基于 Vue 3 的前端控制台，覆盖聊天、知识库管理、用户管理、运维面板和 token 监控。
 - 使用 PostgreSQL 存储用户、会话、知识库元数据、审计事件、反馈和模型调用量等结构化数据。
-- 使用 pgvector 做向量持久化，并结合 PostgreSQL 的 chunk 元数据与 BM25 做混合检索。
+- 使用 Milvus 做向量持久化，PostgreSQL 保留 chunk 文本、元数据与 BM25 数据，二者共同完成混合检索。
 - 支持知识上传、本地知识源同步、索引任务、访问控制、RAG 评测和审计。
 
 ## 适用场景
@@ -73,7 +73,7 @@
 - 后端：FastAPI
 - 前端：Vue 3 + Vite
 - 关系型数据：PostgreSQL
-- 向量存储：pgvector (PostgreSQL)
+- 向量存储：Milvus
 - 检索策略：向量检索 + BM25 + 可选重排
 
 ## 项目结构
@@ -86,8 +86,8 @@ docs/             部署、架构与生产检查文档
 rag_eval/         评测题目与生成的报告
 knowledge_files/  本地知识源文件目录，已被 Git 忽略
 
-compose.yml       开发环境使用的本地 PostgreSQL 服务
-compose.prod.yml  服务器部署使用的 PostgreSQL、后端与 nginx 服务
+compose.yml       开发环境使用的本地 PostgreSQL 与 Milvus 服务
+compose.prod.yml  服务器部署使用的 PostgreSQL、Milvus、后端与 nginx 服务
 run_tests.py      后端 unittest 测试入口
 ```
 
@@ -98,7 +98,7 @@ Browser
   -> Vue 3 frontend
     -> FastAPI backend
       -> PostgreSQL
-      -> pgvector (in PostgreSQL)
+      -> Milvus
       -> Model APIs
       -> knowledge_files/
 ```
@@ -130,7 +130,7 @@ Copy-Item frontend\.env.example frontend\.env
 VITE_API_BASE=http://localhost:8000
 ```
 
-### 2. 启动本地 PostgreSQL
+### 2. 启动本地 PostgreSQL 和 Milvus
 
 ```powershell
 docker compose up -d
@@ -139,8 +139,8 @@ docker compose up -d
 本地开发推荐方式是：
 
 - 应用代码运行在主机上，便于调试
-- Docker 只运行 PostgreSQL
-- 后端通过 `localhost:5432` 连接数据库
+- Docker 运行 PostgreSQL 和 Milvus
+- 后端通过 `localhost:5432` 连接数据库，并通过 `localhost:19530` 连接 Milvus
 
 ### 3. 安装依赖
 
@@ -190,9 +190,7 @@ npm.cmd run dev
 依赖数据库的测试组需要串行运行：
 
 ```powershell
-.\.venv\Scripts\python.exe run_tests.py --group database
-.\.venv\Scripts\python.exe run_tests.py --group vector
-.\.venv\Scripts\python.exe run_tests.py --group api
+.\.venv\Scripts\python.exe run_tests.py --groups database vector api
 ```
 
 前端：
@@ -239,11 +237,11 @@ TCR_PASSWORD=腾讯云 TCR 个人版初始化密码
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml pull` 拉取生产镜像。
 - 使用 `docker compose --env-file .env.prod -f compose.prod.yml up -d` 启动生产栈。
 - 使用 `python scripts/verify_prod_deploy.py` 检查容器和健康状态。
-- 生产环境建议将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、知识文件、证书和备份放在 `/data/rag-agent`。
+- 生产环境建议将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、Milvus、知识文件、证书和备份放在 `/data/rag-agent`。
 - 生产环境使用 `/opt/rag-agent/.env.prod` 注入后端与数据库变量。
 - 建议通过 HTTPS 和同源部署方式提供前后端服务。
 - 生产环境应设置 `APP_ENV=production`、`SESSION_COOKIE_SECURE=true`、`CORS_ALLOW_LOCALHOST_REGEX=false`。
-- 不要暴露 `.env.prod`、`/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/backups` 或日志目录。
+- 不要暴露 `.env.prod`、`/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/milvus`、`/data/rag-agent/backups` 或日志目录。
 
 ## 文档导航
 

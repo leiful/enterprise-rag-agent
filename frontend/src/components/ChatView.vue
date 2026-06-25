@@ -101,7 +101,7 @@ defineExpose({ scrollToBottom });
         </div>
         <pre>{{ message.content }}</pre>
         <div
-          v-if="message.role === 'assistant' && message.content && index > 0"
+          v-if="message.role === 'assistant' && message.content && index > 0 && !message.isTyping"
           class="message-feedback"
         >
           <button
@@ -122,7 +122,7 @@ defineExpose({ scrollToBottom });
           </span>
         </div>
         <div
-          v-if="message.role === 'assistant' && hasSources(message)"
+          v-if="message.role === 'assistant' && hasSources(message) && !message.isTyping"
           class="message-sources"
         >
           <div v-if="referencedSources(message).length" class="source-list">

@@ -201,7 +201,13 @@ export function useChatConversations({
 
     messages.value.push({ role: "user", content: text, created_at: new Date().toISOString() });
     const assistantIndex = messages.value.length;
-    messages.value.push({ role: "assistant", content: "思考中...", sources: [], created_at: new Date().toISOString() });
+    messages.value.push({
+      role: "assistant",
+      content: "思考中...",
+      sources: [],
+      created_at: new Date().toISOString(),
+      isTyping: true,
+    });
     input.value = "";
     error.value = "";
     loading.value = true;
@@ -234,6 +240,7 @@ export function useChatConversations({
         await loadConversations();
       }
 
+      messages.value[assistantIndex].isTyping = false;
       messages.value[assistantIndex].sources = data.sources || [];
       await revealAnswer(messages.value[assistantIndex], data.answer || "");
 
@@ -242,6 +249,7 @@ export function useChatConversations({
       await loadDeepseekBalance();
     } catch (err) {
       const message = err.message || "Request failed";
+      messages.value[assistantIndex].isTyping = false;
       messages.value[assistantIndex].content = message === "Failed to fetch"
         ? "请求失败，请稍后重试。"
         : message;

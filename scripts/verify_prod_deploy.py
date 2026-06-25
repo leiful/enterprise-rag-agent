@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 EXPECTED_CONTAINERS = {
     "postgres": "ai-agent-postgres",
+    "milvus": "ai-agent-milvus",
     "backend": "ai-agent-backend",
     "nginx": "ai-agent-nginx",
 }

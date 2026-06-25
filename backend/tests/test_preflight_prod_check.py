@@ -12,6 +12,8 @@ CHAT_BASE_URL=https://api.deepseek.com
 EMBEDDING_API_KEY=sk-real-embedding-key
 EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EMBEDDING_MODEL=text-embedding-v4
+MILVUS_URI=http://milvus:19530
+MILVUS_COLLECTION=ai_agent_vectors
 APP_ENV=production
 APP_USERNAME=admin
 APP_PASSWORD=strong-production-password
@@ -72,6 +74,18 @@ class PreflightProdCheckTests(unittest.TestCase):
         result = preflight_prod_check.check_env_file(path)
 
         self.assertIn("POSTGRES_PASSWORD must match the password in DATABASE_URL.", result.errors)
+
+    def test_rejects_localhost_milvus_uri_in_production(self):
+        content = VALID_ENV.replace(
+            "MILVUS_URI=http://milvus:19530",
+            "MILVUS_URI=http://localhost:19530",
+        )
+        temp_dir, path = self.write_env(content)
+        self.addCleanup(temp_dir.cleanup)
+
+        result = preflight_prod_check.check_env_file(path)
+
+        self.assertIn("MILVUS_URI must not point to localhost in production.", result.errors)
 
 
 if __name__ == "__main__":

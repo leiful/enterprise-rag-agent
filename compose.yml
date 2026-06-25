@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: docker.m.daocloud.io/pgvector/pgvector:pg16
+    image: docker.m.daocloud.io/library/postgres:16
     container_name: ai-agent-postgres
     restart: unless-stopped
     env_file:
@@ -14,5 +14,21 @@ services:
     volumes:
       - ai_agent_postgres_data:/var/lib/postgresql/data
 
+  milvus:
+    image: docker.m.daocloud.io/milvusdb/milvus:v2.6.5
+    container_name: ai-agent-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      DEPLOY_MODE: STANDALONE
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      COMMON_STORAGETYPE: local
+    ports:
+      - "19530:19530"
+    volumes:
+      - ai_agent_milvus_data:/var/lib/milvus
+
 volumes:
   ai_agent_postgres_data:
+  ai_agent_milvus_data:

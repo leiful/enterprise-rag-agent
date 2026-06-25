@@ -30,6 +30,7 @@ class VerifyProdDeployTests(unittest.TestCase):
 
         result = verify_prod_deploy.check_compose_services(runner)
 
+        self.assertIn("compose ps output does not include ai-agent-milvus.", result.errors)
         self.assertIn("compose ps output does not include ai-agent-nginx.", result.errors)
 
     def test_http_health_uses_configured_url(self):

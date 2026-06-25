@@ -11,6 +11,8 @@ REQUIRED_KEYS = {
     "EMBEDDING_API_KEY",
     "EMBEDDING_BASE_URL",
     "EMBEDDING_MODEL",
+    "MILVUS_URI",
+    "MILVUS_COLLECTION",
     "APP_ENV",
     "APP_USERNAME",
     "APP_PASSWORD",
@@ -136,6 +138,14 @@ def check_env_values(values):
 
     if values.get("DEFAULT_KNOWLEDGE_SOURCE_PATH", "").startswith(("http://", "https://")):
         errors.append("DEFAULT_KNOWLEDGE_SOURCE_PATH must be a container filesystem path, not a URL.")
+
+    milvus_uri = values.get("MILVUS_URI", "")
+    parsed_milvus_uri = urlparse(milvus_uri)
+    if milvus_uri:
+        if parsed_milvus_uri.scheme not in {"http", "https", "tcp", "grpc"}:
+            errors.append("MILVUS_URI must use http, https, tcp, or grpc scheme.")
+        if parsed_milvus_uri.hostname in {"localhost", "127.0.0.1"}:
+            errors.append("MILVUS_URI must not point to localhost in production.")
 
     return CheckResult(errors=errors, warnings=warnings)
 

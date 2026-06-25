@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: docker.m.daocloud.io/pgvector/pgvector:pg16
+    image: docker.m.daocloud.io/library/postgres:16
     container_name: ai-agent-postgres
     restart: unless-stopped
     environment:
@@ -28,14 +28,49 @@ services:
         max-size: 10m
         max-file: "3"
 
+  milvus:
+    image: docker.m.daocloud.io/milvusdb/milvus:v2.6.5
+    container_name: ai-agent-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      DEPLOY_MODE: STANDALONE
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      COMMON_STORAGETYPE: local
+    volumes:
+      - /data/rag-agent/milvus:/var/lib/milvus
+    networks:
+      - backend_network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/19530'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
   backend:
     image: ccr.ccs.tencentyun.com/enterprise-rag-agent/enterprise-rag-agent:latest
     container_name: ai-agent-backend
     restart: unless-stopped
     env_file:
       - .env.prod
+    environment:
+      MILVUS_URI: ${MILVUS_URI:-http://milvus:19530}
     depends_on:
       postgres:
+        condition: service_healthy
+      milvus:
         condition: service_healthy
     networks:
       - backend_network

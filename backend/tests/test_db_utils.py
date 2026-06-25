@@ -12,6 +12,29 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 _test_database_available = None
 
 
+class FakeMilvusVectorClient:
+    def __init__(self):
+        self.vectors = {}
+
+    def upsert_embeddings(self, items):
+        for item in items:
+            self.vectors[item["chunk_id"]] = item["embedding"]
+
+    def delete_embeddings(self, chunk_ids):
+        for chunk_id in chunk_ids:
+            self.vectors.pop(chunk_id, None)
+
+    def search(self, query_embedding, top_k):
+        results = []
+        for chunk_id, embedding in self.vectors.items():
+            results.append({
+                "chunk_id": chunk_id,
+                "score": vector_store.cosine_similarity(query_embedding, embedding),
+            })
+        results.sort(key=lambda item: item["score"], reverse=True)
+        return results[:top_k]
+
+
 def require_test_database():
     global _test_database_available
     if not TEST_DATABASE_URL:
@@ -57,40 +80,17 @@ def reset_test_database():
         )
 
 
-def fake_vector_similarity_search(query, top_k, embedding_client):
-    query_embedding = embedding_client.embed([query])[0]
-    with database.connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, document_id, chunk_index, text, embedding_json, metadata_json
-            FROM vector_chunks
-            """
-        ).fetchall()
-
-    results = []
-    for row in rows:
-        embedding = vector_store.json.loads(row["embedding_json"])
-        results.append({
-            "score": vector_store.cosine_similarity(query_embedding, embedding),
-            "chunk_id": row["id"],
-            "document_id": row["document_id"],
-            "chunk_index": row["chunk_index"],
-            "text": row["text"],
-            "metadata": vector_store._parse_metadata_json(dict(row).get("metadata_json")),
-        })
-    results.sort(key=lambda result: result["score"], reverse=True)
-    return results[:top_k]
-
-
 @contextmanager
 def patched_postgres_database(username="admin", password="password"):
     require_test_database()
+    milvus_client = FakeMilvusVectorClient()
     patches = [
         patch.object(database, "DATABASE_URL", TEST_DATABASE_URL),
         patch.object(database, "APP_USERNAME", username),
         patch.object(database, "APP_PASSWORD", password),
         patch.object(main, "APP_USERNAME", username),
         patch.object(main, "APP_PASSWORD", password),
+        patch.object(vector_store, "get_milvus_vector_client", return_value=milvus_client),
     ]
     started = []
     try:

@@ -25,11 +25,17 @@ from config import (
     SEMANTIC_BOUNDARY_STD_FACTOR,
     SEMANTIC_CHUNK_MIN_UNITS,
     SEMANTIC_CHUNK_SOFT_RATIO,
+    MILVUS_COLLECTION,
+    MILVUS_TOKEN,
+    MILVUS_URI,
 )
 from model_usage import record_model_usage
 
 
 MAX_EMBEDDING_BATCH_SIZE = 10
+MILVUS_METRIC_TYPE = "COSINE"
+MILVUS_FIELD_CHUNK_ID = "chunk_id"
+MILVUS_FIELD_EMBEDDING = "embedding"
 
 # BM25 parameters
 BM25_K1 = 1.5
@@ -42,6 +48,7 @@ _VECTOR_SEARCH_CACHE = {}
 _BM25_SEARCH_CACHE = {}
 _HYBRID_SEARCH_CACHE = {}
 _METADATA_CACHE = {}
+_MILVUS_VECTOR_CLIENT = None
 
 
 @dataclass
@@ -77,13 +84,16 @@ def _cache_set(cache, key, value):
         cache[key] = (expires_at, value)
 
 
-def clear_runtime_caches():
+def clear_runtime_caches(reset_milvus_client=False):
+    global _MILVUS_VECTOR_CLIENT
     with _CACHE_LOCK:
         _EMBEDDING_CACHE.clear()
         _VECTOR_SEARCH_CACHE.clear()
         _BM25_SEARCH_CACHE.clear()
         _HYBRID_SEARCH_CACHE.clear()
         _METADATA_CACHE.clear()
+    if reset_milvus_client:
+        _MILVUS_VECTOR_CLIENT = None
 
 
 def _clone_results(results):
@@ -149,6 +159,106 @@ class EmbeddingClient:
                 _cache_set(_EMBEDDING_CACHE, (self.model, texts[original_index]), embedding)
 
         return embeddings
+
+
+class MilvusVectorClient:
+    def __init__(
+        self,
+        uri=MILVUS_URI,
+        token=MILVUS_TOKEN,
+        collection_name=MILVUS_COLLECTION,
+        dimension=EMBEDDING_DIM,
+    ):
+        if not uri:
+            raise ValueError("Missing MILVUS_URI. Set it in .env.")
+        if not collection_name:
+            raise ValueError("Missing MILVUS_COLLECTION. Set it in .env.")
+
+        try:
+            from pymilvus import MilvusClient
+        except ImportError as error:
+            raise RuntimeError("pymilvus is required for Milvus vector search.") from error
+
+        self.collection_name = collection_name
+        self.dimension = dimension
+        kwargs = {"uri": uri}
+        if token:
+            kwargs["token"] = token
+        self.client = MilvusClient(**kwargs)
+        self._ensure_collection()
+
+    def _ensure_collection(self):
+        if self.client.has_collection(self.collection_name):
+            return
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            dimension=self.dimension,
+            primary_field_name=MILVUS_FIELD_CHUNK_ID,
+            id_type="string",
+            max_length=512,
+            vector_field_name=MILVUS_FIELD_EMBEDDING,
+            metric_type=MILVUS_METRIC_TYPE,
+            auto_id=False,
+        )
+
+    def upsert_embeddings(self, items):
+        if not items:
+            return
+        self.client.upsert(
+            collection_name=self.collection_name,
+            data=[
+                {
+                    MILVUS_FIELD_CHUNK_ID: item["chunk_id"],
+                    MILVUS_FIELD_EMBEDDING: item["embedding"],
+                }
+                for item in items
+            ],
+        )
+
+    def delete_embeddings(self, chunk_ids):
+        if not chunk_ids:
+            return
+        self.client.delete(
+            collection_name=self.collection_name,
+            ids=list(chunk_ids),
+        )
+
+    def search(self, query_embedding, top_k):
+        if top_k <= 0:
+            return []
+        result_sets = self.client.search(
+            collection_name=self.collection_name,
+            data=[query_embedding],
+            limit=top_k,
+            output_fields=[MILVUS_FIELD_CHUNK_ID],
+            search_params={"metric_type": MILVUS_METRIC_TYPE},
+        )
+        if not result_sets:
+            return []
+        results = []
+        for item in result_sets[0]:
+            chunk_id = None
+            if isinstance(item, dict):
+                chunk_id = item.get(MILVUS_FIELD_CHUNK_ID) or item.get("id")
+                entity = item.get("entity") or {}
+                chunk_id = entity.get(MILVUS_FIELD_CHUNK_ID, chunk_id)
+                score = item.get("distance", item.get("score", 0.0))
+            else:
+                entity = getattr(item, "entity", {}) or {}
+                if hasattr(entity, "get"):
+                    chunk_id = entity.get(MILVUS_FIELD_CHUNK_ID)
+                chunk_id = chunk_id or getattr(item, "id", None)
+                score = getattr(item, "distance", getattr(item, "score", 0.0))
+            if chunk_id:
+                results.append({"chunk_id": str(chunk_id), "score": float(score or 0.0)})
+        return results
+
+
+def get_milvus_vector_client():
+    global _MILVUS_VECTOR_CLIENT
+    if _MILVUS_VECTOR_CLIENT is None:
+        _MILVUS_VECTOR_CLIENT = MilvusVectorClient()
+    return _MILVUS_VECTOR_CLIENT
 
 
 def tokenize(text):
@@ -586,6 +696,8 @@ def delete_document(document_id):
 
     for chunk_id in chunk_ids:
         database.delete_bm25_for_chunk(chunk_id)
+    if chunk_ids:
+        get_milvus_vector_client().delete_embeddings(chunk_ids)
 
     with database.connect() as connection:
         connection.execute(
@@ -663,6 +775,10 @@ def upsert_document_segments(
     
     for chunk_id in old_chunk_ids:
         database.delete_bm25_for_chunk(chunk_id)
+    if old_chunk_ids:
+        get_milvus_vector_client().delete_embeddings(old_chunk_ids)
+
+    milvus_items = []
     
     with database.connect() as connection:
         connection.execute(
@@ -685,21 +801,19 @@ def upsert_document_segments(
                     document_id,
                     chunk_index,
                     text,
-                    embedding,
                     metadata_json,
                     content_hash,
                     token_count,
                     created_at,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     chunk_id,
                     document_id,
                     index,
                     chunk,
-                    json.dumps(embedding),
                     json.dumps(chunk_metadata, ensure_ascii=False),
                     content_hash(chunk),
                     token_count,
@@ -709,7 +823,12 @@ def upsert_document_segments(
             )
             
             database.add_bm25_for_chunk(chunk_id, tokens, connection=connection)
+            milvus_items.append({
+                "chunk_id": chunk_id,
+                "embedding": embedding,
+            })
 
+    get_milvus_vector_client().upsert_embeddings(milvus_items)
     database.update_bm25_stats()
     clear_runtime_caches()
 
@@ -780,31 +899,41 @@ def search(query, top_k=3, embedding_client=None):
 
     embedding_client = embedding_client or EmbeddingClient()
     query_embedding = embedding_client.embed([query])[0]
+    vector_hits = get_milvus_vector_client().search(query_embedding, top_k)
+    if not vector_hits:
+        return []
+
+    chunk_ids = [hit["chunk_id"] for hit in vector_hits if hit.get("chunk_id")]
+    if not chunk_ids:
+        return []
 
     with database.connect() as connection:
+        placeholders = ",".join("%s" for _ in chunk_ids)
         rows = connection.execute(
-            """
-            SELECT id, document_id, chunk_index, text,
-                   1 - (embedding <=> %s::vector) AS score,
-                   metadata_json
+            f"""
+            SELECT id, document_id, chunk_index, text, metadata_json
             FROM vector_chunks
-            ORDER BY embedding <=> %s::vector
-            LIMIT %s
+            WHERE id IN ({placeholders})
             """,
-            (json.dumps(query_embedding), json.dumps(query_embedding), top_k),
+            chunk_ids,
         ).fetchall()
 
-    top_results = [
-        SearchResult(
-            score=row["score"],
-            chunk_id=row["id"],
-            document_id=row["document_id"],
-            chunk_index=row["chunk_index"],
-            text=row["text"],
-            metadata=_parse_metadata_json(row.get("metadata_json")),
+    rows_by_id = {row["id"]: row for row in rows}
+    top_results = []
+    for hit in vector_hits:
+        row = rows_by_id.get(hit.get("chunk_id"))
+        if not row:
+            continue
+        top_results.append(
+            SearchResult(
+                score=hit.get("score", 0.0),
+                chunk_id=row["id"],
+                document_id=row["document_id"],
+                chunk_index=row["chunk_index"],
+                text=row["text"],
+                metadata=_parse_metadata_json(row.get("metadata_json")),
+            )
         )
-        for row in rows
-    ]
 
     _cache_set(_VECTOR_SEARCH_CACHE, cache_key, _clone_results(top_results))
     return top_results

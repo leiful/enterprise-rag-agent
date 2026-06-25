@@ -172,6 +172,38 @@ test("sendMessageWithTyping posts to stable chat endpoint and shows thinking whi
   }
 });
 
+test("sendMessageWithTyping marks the assistant placeholder as typing until the answer arrives", async () => {
+  let resolveJson;
+  const pendingJson = new Promise((resolve) => {
+    resolveJson = resolve;
+  });
+  const setup = createSubject({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => pendingJson,
+    }),
+  });
+
+  try {
+    const sending = setup.subject.sendMessageWithTyping();
+    await Promise.resolve();
+
+    assert.equal(setup.refs.messages.value[1].isTyping, true);
+    assert.equal(setup.refs.messages.value[1].feedbackSent, undefined);
+
+    resolveJson({
+      answer: "完整答案",
+      conversation_id: 42,
+      sources: [],
+    });
+    await sending;
+
+    assert.equal(setup.refs.messages.value[1].isTyping, false);
+  } finally {
+    setup.restoreGlobals();
+  }
+});
+
 test("sendMessageWithTyping replaces thinking text with typewriter answer after response", async () => {
   const setup = createSubject();
 

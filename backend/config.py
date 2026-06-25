@@ -33,6 +33,9 @@ EMBEDDING_BASE_URL = os.environ.get(
     "https://dashscope.aliyuncs.com/compatible-mode/v1",
 ).strip()
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-v4").strip()
+MILVUS_URI = os.environ.get("MILVUS_URI", "http://localhost:19530").strip()
+MILVUS_TOKEN = os.environ.get("MILVUS_TOKEN", "").strip()
+MILVUS_COLLECTION = os.environ.get("MILVUS_COLLECTION", "ai_agent_vectors").strip()
 RERANK_API_KEY = os.environ.get("RERANK_API_KEY", EMBEDDING_API_KEY).strip()
 RERANK_API_URL = os.environ.get(
     "RERANK_API_URL",
@@ -221,6 +224,20 @@ def validate_runtime_config():
             "EMBEDDING_DIM",
             "error",
             "EMBEDDING_DIM must be greater than 0.",
+        ))
+
+    if not MILVUS_URI:
+        issues.append(_config_issue(
+            "MILVUS_URI",
+            "error",
+            "MILVUS_URI is required for Milvus vector search.",
+        ))
+
+    if not MILVUS_COLLECTION:
+        issues.append(_config_issue(
+            "MILVUS_COLLECTION",
+            "error",
+            "MILVUS_COLLECTION is required for Milvus vector search.",
         ))
 
     issues.extend(_check_path_parent(

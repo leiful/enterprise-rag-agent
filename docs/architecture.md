@@ -18,7 +18,7 @@
 frontend (Vue 3)
   -> backend (FastAPI)
     -> PostgreSQL
-    -> pgvector (in PostgreSQL)
+    -> Milvus
     -> Model APIs
     -> knowledge_files
 ```
@@ -59,9 +59,9 @@ PostgreSQL 存储结构化业务数据，包括：
 - 知识源与索引任务
 - 反馈、审计和模型用量
 
-### pgvector (向量索引)
+### Milvus (向量索引)
 
-向量索引和检索所需的向量数据直接存储在 PostgreSQL 中（通过 pgvector 扩展），与业务数据共享同一数据库，无需独立的向量存储服务。
+Milvus 存储 embedding 向量和对应的 chunk id，负责向量相似度检索。PostgreSQL 继续存储 chunk 文本、元数据、BM25 数据和业务数据；检索时先由 Milvus 返回 chunk id，再回 PostgreSQL 读取正文和元数据。
 
 ## RAG 处理链路
 
@@ -70,8 +70,8 @@ PostgreSQL 存储结构化业务数据，包括：
 1. 上传文件或同步本地知识源
 2. 解析文档内容
 3. 执行标题感知分块，可选语义分块
-4. 生成 embedding 并写入 pgvector
-5. 写入 PostgreSQL 元数据和 BM25 数据
+4. 生成 embedding 并写入 Milvus（只保存 chunk id 与向量）
+5. 写入 PostgreSQL 的 chunk 文本、元数据和 BM25 数据
 6. 用户发起问题
 7. 执行查询改写、多查询扩展和混合检索
 8. 可选重排候选片段
@@ -117,7 +117,7 @@ PostgreSQL 存储结构化业务数据，包括：
 
 - 前端只暴露构建产物 `frontend/dist/`
 - 后端通过服务进程或容器运行
-- PostgreSQL 数据和向量索引保持私有
+- PostgreSQL 数据、Milvus 向量索引和知识文件保持私有
 - `knowledge_files/`、日志目录和 `.env` 不公开暴露
 
 这套边界兼顾了中小企业常见的单机部署需求和后续扩展空间。

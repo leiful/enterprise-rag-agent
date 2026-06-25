@@ -31,7 +31,31 @@ npm.cmd run build
 
 如果 PowerShell 执行策略拦截 `npm`，使用 `npm.cmd`。
 
-## 4. 生产发布后 Smoke Test
+## 4. 后端测试与数据库串行规则
+
+后端快速测试：
+
+```powershell
+.\.venv\Scripts\python.exe run_tests.py --group fast
+```
+
+依赖 `TEST_DATABASE_URL` 的测试组会重置同一个 PostgreSQL 测试库。`database`、`vector`、`api` 必须串行运行，不要在多个终端或并行工具中同时执行，否则会在 `TRUNCATE`、`CREATE TABLE`、`ALTER TABLE` 等 DDL 阶段触发 PostgreSQL deadlock。
+
+推荐用脚本的串行入口一次跑完：
+
+```powershell
+.\.venv\Scripts\python.exe run_tests.py --groups database vector api
+```
+
+如果只需要单独验证某一层，也可以逐条执行：
+
+```powershell
+.\.venv\Scripts\python.exe run_tests.py --group database
+.\.venv\Scripts\python.exe run_tests.py --group vector
+.\.venv\Scripts\python.exe run_tests.py --group api
+```
+
+## 5. 生产发布后 Smoke Test
 
 前端变更部署到生产后，用浏览器检查：
 
@@ -52,7 +76,7 @@ docker logs ai-agent-backend --tail 100
 docker logs ai-agent-nginx --tail 100
 ```
 
-## 5. 生产问题回归规则
+## 6. 生产问题回归规则
 
 如果生产问题已经到达浏览器或用户侧，修复时必须补一条会在修复前失败的回归测试。
 
@@ -71,14 +95,14 @@ docker logs ai-agent-nginx --tail 100
 4. 建议补哪一种防线，以及为什么选择它。
 5. 用户确认后，再把稳定规则写入文档、测试、脚本或配置。
 
-## 6. Markdown 与中文编码
+## 7. Markdown 与中文编码
 
 - 所有 Markdown 文档使用简体中文。
 - 文件按 UTF-8 保存，不添加本机专用编码或编辑器私有格式。
 - 修改中文文档后，用 UTF-8 读回确认内容正常。
 - 如果终端显示乱码，先用 UTF-8 读取文件确认，不要直接判断文件损坏。
 
-## 7. 测试策略演进
+## 8. 测试策略演进
 
 技术和工具会变化。发现现有测试策略可能落后时，不要直接大改，先给出建议让用户确认。
 

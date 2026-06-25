@@ -32,9 +32,9 @@
 ## 数据边界
 
 - 在部署 schema 或数据访问逻辑变更前，先备份 PostgreSQL。
-- 在重建或替换索引前，先备份 PostgreSQL 数据库，向量索引存储在 PostgreSQL 的 pgvector 表中。
-- 将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、知识文件、证书和备份放在 `/data/rag-agent`。
-- 将 `/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/backups`、`logs/` 和 `.env.prod` 放在公开 Web 根目录之外。
+- 在重建或替换索引前，确认是否需要备份 Milvus 数据目录；如果允许清空向量索引，可清空 Milvus 后重新索引知识库。
+- 将部署配置放在 `/opt/rag-agent`，将 PostgreSQL、Milvus、知识文件、证书和备份放在 `/data/rag-agent`。
+- 将 `/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/milvus`、`/data/rag-agent/backups`、`logs/` 和 `.env.prod` 放在公开 Web 根目录之外。
 - 后端应作为服务进程运行在反向代理或服务管理器后面。
 
 ## 日志与审计
@@ -65,5 +65,5 @@
 - 保留上一版后端发布产物。
 - 保留上一版前端 `dist/` 产物。
 - 记录用于回滚的 PostgreSQL 备份时间戳。
-- 记录用于回滚的 PostgreSQL 备份时间戳（包含向量索引数据）。
+- 记录用于回滚的 Milvus 数据目录备份时间戳；如果不保留向量索引，回滚后需要重新索引知识库。
 - 如果回滚到旧代码，而 schema 或索引行为已发生变化，则恢复对应的 PostgreSQL 数据库快照。

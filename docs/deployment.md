@@ -6,8 +6,8 @@
 
 推荐按以下层次理解部署：
 
-- 本地开发：应用运行在主机上，Docker 只运行 PostgreSQL。
-- 单机生产：后端、PostgreSQL、nginx 运行在同一台服务器上。
+- 本地开发：应用运行在主机上，Docker 运行 PostgreSQL 和 Milvus。
+- 单机生产：后端、PostgreSQL、Milvus、nginx 运行在同一台服务器上。
 - 后续扩展：保留向对象存储、企业文档系统和更完善运维体系扩展的空间。
 
 ## 本地开发部署
@@ -36,19 +36,23 @@ Copy-Item frontend\.env.example frontend\.env
 - `APP_USERNAME`
 - `APP_PASSWORD`
 
+Milvus 本地默认连接 `http://localhost:19530`，如需调整可设置 `MILVUS_URI` 和 `MILVUS_COLLECTION`。
+
 说明：
 
 - `.env` 只给后端和本地 `compose.yml` 使用。
 - `frontend/.env` 只放浏览器可见配置，不要放密钥。
 - 如果不自定义路径，可保持 `DEFAULT_KNOWLEDGE_SOURCE_PATH` 未设置，程序会使用默认目录。
 
-### 启动 PostgreSQL
+### 启动 PostgreSQL 和 Milvus
 
 ```powershell
 docker compose up -d
 ```
 
-本地 `compose.yml` 只启动 PostgreSQL，并从 `.env` 读取 `POSTGRES_PASSWORD`。
+本地 `compose.yml` 启动 PostgreSQL 和 Milvus，并从 `.env` 读取 `POSTGRES_PASSWORD`。Milvus 数据保存在 Docker volume 中；如果需要彻底清空向量索引，可删除 `ai_agent_milvus_data` 数据卷后重新索引知识库。
+
+Milvus 使用 standalone 模式和 embedded etcd；升级 Milvus 镜像或调整 compose 时，必须保留 `DEPLOY_MODE=STANDALONE`、`ETCD_USE_EMBED=true` 和 `COMMON_STORAGETYPE=local`，否则可能在启动时误判为 distributed mode 并反复重启。
 
 ### 启动应用
 
@@ -89,6 +93,8 @@ CHAT_BASE_URL=https://api.deepseek.com
 EMBEDDING_API_KEY=replace_with_real_embedding_api_key
 EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EMBEDDING_MODEL=text-embedding-v4
+MILVUS_URI=http://milvus:19530
+MILVUS_COLLECTION=ai_agent_vectors
 APP_ENV=production
 APP_USERNAME=admin
 APP_PASSWORD=replace_with_a_strong_production_password
@@ -125,6 +131,7 @@ python scripts/preflight_prod_check.py --env-file .env.prod
 /opt/rag-agent/              compose、环境变量和 nginx 配置
 /data/rag-agent/postgres/    PostgreSQL 数据目录
 /data/rag-agent/knowledge/   知识库原始文件
+/data/rag-agent/milvus/      Milvus 向量索引数据
 /data/rag-agent/certbot/     Let's Encrypt 证书与 ACME challenge
 /data/rag-agent/backups/     备份输出目录
 ```
@@ -135,6 +142,7 @@ python scripts/preflight_prod_check.py --env-file .env.prod
 sudo mkdir -p /opt/rag-agent
 sudo mkdir -p /data/rag-agent/postgres
 sudo mkdir -p /data/rag-agent/knowledge
+sudo mkdir -p /data/rag-agent/milvus
 sudo mkdir -p /data/rag-agent/certbot/www
 sudo mkdir -p /data/rag-agent/certbot/conf
 sudo mkdir -p /data/rag-agent/backups
@@ -150,6 +158,13 @@ compose.prod.yml
 nginx.conf
 nginx-ssl.conf
 init-ssl.sh
+```
+
+如果服务器需要使用宿主机脚本，也要上传对应脚本，例如：
+
+```text
+scripts/backup_prod_data.py
+scripts/verify_prod_deploy.py
 ```
 
 如果 PostgreSQL 首次启动时报告数据目录权限问题，可再执行：
@@ -193,12 +208,49 @@ docker compose --env-file .env.prod -f compose.prod.yml up -d
 `compose.prod.yml` 当前包含：
 
 - `postgres`
+- `milvus`
 - `backend`
 - `nginx`
 
 ### 手动更新流程
 
 手动触发 GitHub Actions 的 `deploy` 工作流后，服务器仍需要人工拉取新镜像并重启生产栈。推荐在服务器 `/opt/rag-agent` 目录按以下顺序执行。
+
+先区分这次更新影响哪一层：
+
+```text
+镜像层：后端代码、前端构建产物和运行依赖，通过 docker compose pull 更新。
+宿主机部署层：compose、nginx、init-ssl.sh、scripts/ 等文件，需要同步到 /opt/rag-agent。
+生产数据层：PostgreSQL、Milvus、知识库文件、证书和备份，位于 /data/rag-agent，不应被发布覆盖。
+```
+
+如果更新包含宿主机部署层文件，先确认 `/opt/rag-agent` 是否是 git 仓库：
+
+```bash
+cd /opt/rag-agent
+git status
+```
+
+如果能正常显示分支状态，可以使用：
+
+```bash
+git pull
+```
+
+如果显示 `fatal: not a git repository`，说明当前是手动上传的普通部署目录，不能使用 `git pull`。此时应从本地上传变更过的宿主机文件，例如：
+
+```bash
+mkdir -p /opt/rag-agent/scripts
+```
+
+本地上传示例：
+
+```powershell
+scp scripts\backup_prod_data.py ubuntu@your-server:/opt/rag-agent/scripts/
+scp scripts\verify_prod_deploy.py ubuntu@your-server:/opt/rag-agent/scripts/
+```
+
+不要把 `.env.prod` 放进镜像或提交到仓库；它应继续只保存在服务器安全位置。
 
 1. 记录当前状态，方便失败时对比：
 
@@ -294,7 +346,7 @@ Internet
     -> frontend/dist
     -> backend API
       -> PostgreSQL
-      -> pgvector 向量索引
+      -> Milvus 向量索引
       -> knowledge_files
 ```
 
@@ -302,7 +354,7 @@ Internet
 
 - 前端静态资源和 API 走同一域名，降低 Cookie 和 CORS 复杂度。
 - 后端只运行在内网地址或容器网络中，由 nginx 反向代理访问。
-- `/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/backups`、日志目录和 `.env.prod` 不放到公开静态目录中。
+- `/data/rag-agent/knowledge`、`/data/rag-agent/postgres`、`/data/rag-agent/milvus`、`/data/rag-agent/backups`、日志目录和 `.env.prod` 不放到公开静态目录中。
 - 优先使用 HTTPS。
 
 ## 生产安全基线

@@ -39,6 +39,16 @@ def parse_args():
         help="Run a maintained subset: fast, api, database, or vector.",
     )
     parser.add_argument(
+        "--groups",
+        nargs="+",
+        choices=sorted(TEST_GROUPS),
+        help=(
+            "Run multiple maintained subsets sequentially. Use this instead of "
+            "parallel shell commands for database, vector, and api because they "
+            "share TEST_DATABASE_URL and reset the same test database."
+        ),
+    )
+    parser.add_argument(
         "--list-groups",
         action="store_true",
         help="Show available test groups and exit.",
@@ -68,6 +78,16 @@ def main():
     loader = unittest.defaultTestLoader
     if args.paths:
         suite = loader.loadTestsFromNames(args.paths)
+    elif args.groups:
+        failures = 0
+        runner = unittest.TextTestRunner(verbosity=2)
+        for group in args.groups:
+            print(f"\n=== Running test group: {group} ===")
+            suite = load_group_suite(loader, tests_dir, group)
+            result = runner.run(suite)
+            if not result.wasSuccessful():
+                failures += 1
+        return 0 if failures == 0 else 1
     elif args.group:
         suite = load_group_suite(loader, tests_dir, args.group)
     else:

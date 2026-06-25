@@ -452,7 +452,7 @@ def get_rag_operational_status():
             "recent_failed": failed_index_jobs,
         },
         "retrieval": {
-            "vector_store_backend": "pgvector",
+            "vector_store_backend": "milvus",
             "bm25_total_docs": bm25_stats.get("total_docs", 0),
             "bm25_avg_doc_len": bm25_stats.get("avg_doc_len", 0.0),
             "query_rewrite_enabled": ENABLE_QUERY_REWRITE,

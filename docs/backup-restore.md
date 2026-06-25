@@ -13,6 +13,7 @@
 当前不做：
 
 - 不自动恢复生产数据库。
+- 不自动备份或恢复 Milvus 向量索引；向量索引可通过重新索引知识库重建。
 - 不复制 `.env.prod` 明文。
 - 不替代异地备份、云盘快照或灾备方案。
 
@@ -47,6 +48,7 @@
 ```text
 /data/rag-agent/postgres/   PostgreSQL 数据目录，不直接复制
 /data/rag-agent/knowledge/  知识库原始文件
+/data/rag-agent/milvus/     Milvus 向量索引数据，默认不进入脚本备份
 /data/rag-agent/backups/    本机备份输出目录
 ```
 
@@ -64,6 +66,7 @@
 - `ai_agent.dump` 来自 `pg_dump -F c`，用于 `pg_restore`。
 - `knowledge.tar.gz` 是知识库原始文件压缩包。
 - `manifest.json` 记录备份时间、数据库名、知识库目录和文件名。
+- Milvus 向量索引默认不备份；如果清空或丢失，恢复 PostgreSQL 和知识文件后重新同步或重建知识库索引。
 - `.env.prod` 不会被复制，因为里面包含生产密钥、数据库密码和 Cookie secret。
 
 ## 4. 手动备份
@@ -130,8 +133,9 @@ tail -n 100 /data/rag-agent/backups/backup.log
 
 自动备份会持续占用磁盘空间。空间增长主要来自：
 
-- `ai_agent.dump`：数据库、会话、审计、反馈、向量数据。
+- `ai_agent.dump`：数据库、会话、审计、反馈、chunk 文本、元数据和 BM25 数据。
 - `knowledge.tar.gz`：知识库原始文件。
+- Milvus 向量索引不在当前脚本备份中；如需保留，可另行备份 `/data/rag-agent/milvus`，但通常可以通过重建索引恢复。
 
 当前脚本默认：
 
@@ -152,6 +156,7 @@ python scripts/backup_prod_data.py --retention-count 14
 df -h
 du -sh /data/rag-agent/backups
 du -sh /data/rag-agent/knowledge
+du -sh /data/rag-agent/milvus
 ```
 
 如果磁盘增长过快，可以临时降低保留数量，例如：
