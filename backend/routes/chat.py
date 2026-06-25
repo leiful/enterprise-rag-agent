@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 import app_state
-from AI_agent import build_knowledge_preflight, run_agent, run_agent_stream
+from AI_agent import run_agent, run_agent_stream_with_preflight
 from app_logging import get_logger, log_event
-from config import SYSTEM_MESSAGE
+
 from database import (
     add_knowledge_access_audit,
     add_rag_feedback,
@@ -35,17 +35,6 @@ def make_conversation_title(message):
     if len(title) > 48:
         return f"{title[:45]}..."
     return title or "New conversation"
-
-
-def build_agent_messages(saved_messages):
-    messages = [SYSTEM_MESSAGE.copy()]
-    for message in saved_messages:
-        if message["role"] in {"user", "assistant"}:
-            messages.append({
-                "role": message["role"],
-                "content": message["content"],
-            })
-    return messages
 
 
 def encode_sources_header(sources):
@@ -149,31 +138,20 @@ def chat(request: ChatRequest, user=Depends(require_user)):
     scope_token = model_usage.set_usage_scope("chat")
     try:
         with app_state.ChatAdmission(user["id"], conversation_id):
-            saved_messages = list_messages(user["id"], conversation_id)
-            agent_messages = build_agent_messages(saved_messages)
             start = time.perf_counter()
-            knowledge_preflight = build_knowledge_preflight(
-                request.message,
-                app_state.client,
-                agent_messages,
-                departments=user_knowledge_departments(user),
-            )
             result = run_agent(
                 app_state.client,
-                agent_messages,
+                None,
                 request.message,
-                knowledge_preflight=knowledge_preflight,
                 return_sources=True,
+                departments=user_knowledge_departments(user),
+                thread_id=conversation_id,
+                user_id=user["id"],
             )
             answer = result["answer"]
             sources = result["sources"]
-            add_knowledge_access_audit(
-                user,
-                "chat",
-                request.message,
-                sources,
-                access_stats=knowledge_preflight.get("access_stats"),
-            )
+            access_stats = (result.get("knowledge_preflight") or {}).get("access_stats")
+            add_knowledge_access_audit(user, "chat", request.message, sources, access_stats=access_stats)
             log_event(
                 logger,
                 20,
@@ -224,27 +202,21 @@ def chat_stream(request: ChatRequest, user=Depends(require_user)):
 
     admission = app_state.ChatAdmission(user["id"], conversation_id)
     admission.__enter__()
-    saved_messages = list_messages(user["id"], conversation_id)
-    agent_messages = build_agent_messages(saved_messages)
     start = time.perf_counter()
-    knowledge_preflight = build_knowledge_preflight(
-        request.message,
+    answer_iter, sources = run_agent_stream_with_preflight(
         app_state.client,
-        agent_messages,
+        None,
+        request.message,
         departments=user_knowledge_departments(user),
+        thread_id=conversation_id,
+        user_id=user["id"],
     )
-    sources = knowledge_preflight["sources"]
 
     def stream_answer():
         answer_parts = []
         scope_token = model_usage.set_usage_scope("chat")
         try:
-            for chunk in run_agent_stream(
-                app_state.client,
-                agent_messages,
-                request.message,
-                knowledge_preflight=knowledge_preflight,
-            ):
+            for chunk in answer_iter:
                 answer_parts.append(chunk)
                 yield chunk
         finally:
@@ -256,7 +228,7 @@ def chat_stream(request: ChatRequest, user=Depends(require_user)):
                         "chat_stream",
                         request.message,
                         sources,
-                        access_stats=knowledge_preflight.get("access_stats"),
+                        access_stats=None,
                     )
                     save_chat_turn(
                         user["id"],

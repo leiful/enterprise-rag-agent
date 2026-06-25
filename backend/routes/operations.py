@@ -47,7 +47,7 @@ from database import (
     get_knowledge_source_file_status_counts,
     get_unacknowledged_failed_index_job_count,
     list_failed_index_jobs,
-    reassign_knowledge_source_files,
+
     summarize_model_usage,
     summarize_rag_feedback,
     update_index_job,
@@ -58,7 +58,7 @@ import knowledge
 import knowledge_sources
 import model_usage
 import rag_eval_runtime
-import tools
+
 from schemas import (
     AcknowledgeIndexJobsRequest,
     DeepSeekBalanceResponse,
@@ -830,7 +830,8 @@ def clear_missing_knowledge_source_files(user=Depends(require_admin)):
 @router.post("/knowledge/search")
 def search_knowledge(request: SearchKnowledgeRequest, user=Depends(require_admin)):
     scope_token = model_usage.set_usage_scope("knowledge_search")
-    top_k = max(1, min(request.top_k, tools.MAX_KNOWLEDGE_RESULTS))
+    MAX_KNOWLEDGE_RESULTS = 5
+    top_k = max(1, min(request.top_k, MAX_KNOWLEDGE_RESULTS))
     try:
         start = time.perf_counter()
         retrieval_payload = search_knowledge_payload(

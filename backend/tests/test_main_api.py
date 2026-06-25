@@ -395,14 +395,16 @@ class ApiAuthTests(unittest.TestCase):
                 }
             ],
         }
-        with patch("routes.chat.build_knowledge_preflight", return_value=preflight):
-            with patch("routes.chat.run_agent_stream", return_value=iter(["hello ", "there"])):
-                with TestClient(main.app) as client:
-                    login_response = client.post(
-                        "/login",
-                        json={"username": "admin", "password": "password"},
-                    )
-                    response = client.post("/chat/stream", json={"message": "hello"})
+        with patch("routes.chat.run_agent_stream_with_preflight", return_value=(
+            iter(["hello ", "there"]),
+            preflight.get("sources", []),
+        )):
+            with TestClient(main.app) as client:
+                login_response = client.post(
+                    "/login",
+                    json={"username": "admin", "password": "password"},
+                )
+                response = client.post("/chat/stream", json={"message": "hello"})
 
         self.assertEqual(login_response.status_code, 200)
         self.assertEqual(response.status_code, 200)

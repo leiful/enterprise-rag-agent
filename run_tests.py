@@ -9,6 +9,7 @@ TEST_GROUPS = {
         "test_ai_agent.py",
         "test_backup_prod_data.py",
         "test_config.py",
+        "test_graph.py",
         "test_document_parsers.py",
         "test_knowledge_access.py",
         "test_knowledge_metadata.py",
@@ -17,7 +18,7 @@ TEST_GROUPS = {
         "test_preflight_prod_check.py",
         "test_rag_eval_gate.py",
         "test_rag_status.py",
-        "test_tools.py",
+        # "test_tools.py", (removed with tool cleanup)
         "test_verify_prod_deploy.py",
     ],
     "api": ["test_main_api.py"],

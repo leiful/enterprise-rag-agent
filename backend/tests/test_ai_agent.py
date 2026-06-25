@@ -10,14 +10,12 @@ import chains.retrieval_chain as retrieval_chain
 from AI_agent import (
     KNOWLEDGE_PREFLIGHT_PREFIX,
     build_knowledge_preflight,
-    build_user_message_with_knowledge_preflight,
     main,
     rerank_with_dashscope,
     run_agent,
     run_agent_stream,
-    run_tool_call,
-    search_knowledge_results,
 )
+from services.knowledge_runtime import search_knowledge_results
 from config import NO_EVIDENCE_ANSWER, SYSTEM_MESSAGE
 import vector_store
 from vector_store import SearchResult
@@ -34,28 +32,6 @@ def knowledge_preflight(text="No supported knowledge evidence was found.", sourc
         "sources": sources or [],
     }
 
-
-def make_tool_call(name, arguments):
-    return {
-        "id": f"call_{name}",
-        "name": name,
-        "args": arguments,
-        "type": "tool_call",
-    }
-
-
-def make_message(content="", tool_calls=None):
-    tool_calls = tool_calls or []
-
-    return SimpleNamespace(
-        content=content,
-        tool_calls=tool_calls,
-        model_dump=lambda exclude_none=True: {
-            "role": "assistant",
-            "content": content,
-            **({"tool_calls": tool_calls} if tool_calls else {}),
-        },
-    )
 
 
 class FakeLangChainClient:
@@ -74,30 +50,6 @@ class FakeLangChainClient:
         return iter(self.stream_chunks)
 
 
-class RunToolCallTests(unittest.TestCase):
-    def test_get_time_returns_result(self):
-        tool_call = make_tool_call("get_time", {})
-
-        tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(tool_call, 10)
-
-        self.assertEqual(tool_args, {})
-        self.assertRegex(tool_result, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
-        self.assertEqual(remaining_lines, 10)
-        self.assertFalse(denied_by_user)
-
-    def test_missing_required_argument_returns_clear_error(self):
-        tool_call = make_tool_call("search_knowledge", {})
-
-        tool_args, tool_result, remaining_lines, denied_by_user = run_tool_call(tool_call, 10)
-
-        self.assertEqual(tool_args, {})
-        self.assertEqual(
-            tool_result,
-            "search_knowledge error: missing required argument 'query'.",
-        )
-        self.assertEqual(remaining_lines, 10)
-        self.assertFalse(denied_by_user)
-
 
 class RunAgentTests(unittest.TestCase):
     def setUp(self):
@@ -106,25 +58,6 @@ class RunAgentTests(unittest.TestCase):
 
     def tearDown(self):
         self.model_usage_patch.stop()
-
-    def test_build_user_message_with_knowledge_preflight(self):
-        with patch(
-            "AI_agent.build_knowledge_preflight",
-            return_value={
-                "content": (
-                    f"{KNOWLEDGE_PREFLIGHT_PREFIX}\n"
-                    "No supported knowledge evidence was found.\n\n"
-                    "User question:\n"
-                    "who is trump?"
-                ),
-                "sources": [],
-            },
-        ):
-            message = build_user_message_with_knowledge_preflight("who is trump?")
-
-        self.assertIn(KNOWLEDGE_PREFLIGHT_PREFIX, message)
-        self.assertIn("No supported knowledge evidence was found.", message)
-        self.assertIn("User question:\nwho is trump?", message)
 
     def test_run_agent_returns_answer_from_lcel_chain(self):
         client = FakeLangChainClient(responses=[AIMessage(content="The current time was checked.")])
@@ -139,7 +72,7 @@ class RunAgentTests(unittest.TestCase):
             "sources": [],
         }
 
-        with patch("AI_agent.STRICT_KNOWLEDGE_ABSTENTION", False):
+        with patch("graph.graph.STRICT_KNOWLEDGE_ABSTENTION", False):
             with patch("services.agent_runtime.append_log_entries"):
                 with redirect_stdout(StringIO()):
                     answer = run_agent(client, messages, "what time is it?", knowledge_preflight=preflight)
@@ -187,7 +120,7 @@ class RunAgentTests(unittest.TestCase):
             "sources": [],
         }
 
-        with patch("AI_agent.STRICT_KNOWLEDGE_ABSTENTION", False):
+        with patch("graph.graph.STRICT_KNOWLEDGE_ABSTENTION", False):
             with patch("services.agent_runtime.append_log_entries"):
                 answer = "".join(run_agent_stream(client, messages, "hello", knowledge_preflight=preflight))
 

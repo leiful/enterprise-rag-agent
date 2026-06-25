@@ -249,24 +249,6 @@ def compute_file_fingerprint(file_path: Path) -> dict:
 
 
 def find_existing_document_by_fingerprint(fingerprint: dict) -> str | None:
-    """
-    通过文件指纹查找已存在的文档 ID
-    
-    策略：
-    1. 先匹配快速指纹（文件名+大小）
-    2. 如果匹配，再验证内容哈希
-    3. 如果快速指纹不匹配，尝试仅用内容哈希匹配
-    """
-    if not fingerprint:
-        return None
-    
-    # 先查询所有文档的元数据，查找匹配的
-    # 这里假设你有一个表存储文档元数据
-    # 暂时用简化版实现
-    return None
-
-
-def find_existing_document_by_fingerprint(fingerprint: dict) -> str | None:
     if not fingerprint:
         return None
     return vector_store.find_document_by_content_hash(fingerprint.get("content_hash"))
@@ -604,10 +586,4 @@ def save_upload_file(upload_file):
     return target, None
 
 
-def upload_and_index_file(upload_file, document_id=None, embedding_client=None, notes=None, category=None, tags=None, metadata=None):
-    target, error = save_upload_file(upload_file)
-    if error:
-        return None, error
 
-    relative_path = target.relative_to(PROJECT_ROOT).as_posix()
-    return index_file(str(relative_path), document_id, embedding_client, notes=notes, category=category, tags=tags, metadata=metadata, use_original_name=True)

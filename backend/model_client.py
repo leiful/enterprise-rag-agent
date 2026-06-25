@@ -29,16 +29,4 @@ def create_client():
 
 
 def format_model_error(error):
-    if isinstance(error, AuthenticationError):
-        return "Model request error: authentication failed. Check DEEPSEEK_API_KEY in .env."
-    if isinstance(error, RateLimitError):
-        return "Model request error: rate limit reached. Wait a moment and try again."
-    if isinstance(error, BadRequestError):
-        return f"Model request error: bad request. {error}"
-    if isinstance(error, APIConnectionError):
-        return f"Model request error: connection failed. {error}"
-    if isinstance(error, APIStatusError):
-        return f"Model request error: API returned status {error.status_code}. {error}"
-    if isinstance(error, APIError):
-        return f"Model request error: API error. {error}"
-    return f"Model request error: {error}"
+    return "AI 服务暂时不可用，请稍后再试。"

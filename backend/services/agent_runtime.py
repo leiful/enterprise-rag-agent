@@ -7,61 +7,6 @@ from app_logging import request_id_var
 from model_usage import record_model_usage
 
 
-def run_agent(
-    client,
-    messages,
-    user_input,
-    *,
-    build_answer_response_chain,
-    knowledge_preflight=None,
-    return_sources=False,
-):
-    new_messages = []
-    response_chain = build_answer_response_chain(client)
-
-    try:
-        chain_result = response_chain.invoke(
-            {
-                "messages": messages,
-                "user_input": user_input,
-                "knowledge_preflight": knowledge_preflight,
-            }
-        )
-    except Exception as error:
-        fallback_preflight = knowledge_preflight or {"sources": []}
-        error_message = {"role": "assistant", "content": format_model_error(error)}
-        messages.append(error_message)
-        new_messages.append(error_message)
-        append_log_entries(new_messages)
-        trim_messages(messages)
-        if return_sources:
-            return {"answer": error_message["content"], "sources": fallback_preflight["sources"]}
-        return error_message["content"]
-
-    knowledge_preflight = chain_result["knowledge_preflight"]
-    user_message = {"role": "user", "content": knowledge_preflight["content"]}
-    assistant_message = {"role": "assistant", "content": chain_result["answer"]}
-    record_model_usage(
-        provider="deepseek",
-        model=MODEL,
-        operation="chat",
-        request_id=request_id_var.get(),
-        input_texts=[message.get("content", "") for message in messages] + [user_input],
-        output_texts=[chain_result["answer"]],
-        document_count=len(knowledge_preflight.get("sources") or []),
-    )
-
-    messages.append(user_message)
-    messages.append(assistant_message)
-    new_messages.extend([user_message, assistant_message])
-
-    append_log_entries(new_messages)
-    trim_messages(messages)
-    if return_sources:
-        return {"answer": chain_result["answer"], "sources": knowledge_preflight["sources"]}
-    return chain_result["answer"]
-
-
 def run_agent_stream(
     client,
     messages,

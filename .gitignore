@@ -12,7 +12,9 @@ backups/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
 knowledge_files/
+data/
 chroma_db/
 rag_eval/generated/
 rag_eval/reports/
