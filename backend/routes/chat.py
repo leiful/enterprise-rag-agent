@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 import app_state
+from app_state import knowledge_version
 from AI_agent import run_agent, run_agent_stream_with_preflight
 from app_logging import get_logger, log_event
 
@@ -147,6 +148,7 @@ def chat(request: ChatRequest, user=Depends(require_user)):
                 departments=user_knowledge_departments(user),
                 thread_id=conversation_id,
                 user_id=user["id"],
+                knowledge_version=knowledge_version,
             )
             answer = result["answer"]
             sources = result["sources"]
@@ -210,6 +212,7 @@ def chat_stream(request: ChatRequest, user=Depends(require_user)):
         departments=user_knowledge_departments(user),
         thread_id=conversation_id,
         user_id=user["id"],
+        knowledge_version=knowledge_version,
     )
 
     def stream_answer():

@@ -16,6 +16,14 @@ client = None
 startup_error = None
 config_issues = []
 SESSION_COOKIE = "agent_session"
+knowledge_version = 0
+_knowledge_version_lock = threading.Lock()
+
+
+def bump_knowledge_version():
+    global knowledge_version
+    with _knowledge_version_lock:
+        knowledge_version += 1
 
 chat_admission_lock = threading.Lock()
 active_chat_total = 0

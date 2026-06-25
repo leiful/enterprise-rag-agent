@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from cache import response_cache
 from adapters.content_adapter import extract_text_content
 from config import (
     DEFAULT_KNOWLEDGE_MIN_SCORE,
@@ -102,8 +103,17 @@ def build_knowledge_preflight(
 def run_agent(
     client, messages, user_input, max_steps=5, knowledge_preflight=None, return_sources=False,
     category=None, tags=None, file_extensions=None, departments=None, use_multi_query=None,
-    thread_id=None, user_id=None,
+    thread_id=None, user_id=None, knowledge_version=None,
 ):
+    is_first_turn = not messages or len(messages) <= 1
+    if is_first_turn and knowledge_preflight is None and knowledge_version is not None:
+        cache_key = response_cache.make_key(user_input, departments, knowledge_version)
+        cached = response_cache.get(cache_key)
+        if cached is not None:
+            if return_sources:
+                return cached
+            return cached.get("answer", cached)
+
     graph = build_agent_graph(
         build_answer_response_chain,
         extract_text_content=extract_text_content,
@@ -130,6 +140,14 @@ def run_agent(
     if messages:
         state["messages"] = messages
     result = graph.invoke(state, config=config)
+
+    if is_first_turn and knowledge_preflight is None and knowledge_version is not None:
+        cache_key = response_cache.make_key(user_input, departments, knowledge_version)
+        response_cache.set(cache_key, {
+            "answer": result["answer"],
+            "sources": result.get("sources", []),
+            "knowledge_preflight": result.get("knowledge_preflight"),
+        })
 
     if return_sources:
         return {
@@ -173,7 +191,16 @@ def run_agent_stream(
     )
 
 
-def run_agent_stream_with_preflight(client, messages, user_input, *, departments=None, thread_id=None, user_id=None):
+def run_agent_stream_with_preflight(client, messages, user_input, *, departments=None, thread_id=None, user_id=None, knowledge_version=None):
+    is_first_turn = not messages or len(messages) <= 1
+    if is_first_turn and knowledge_version is not None:
+        cache_key = response_cache.make_key(user_input, departments, knowledge_version)
+        cached = response_cache.get(cache_key)
+        if cached is not None:
+            def cached_stream():
+                yield cached.get("answer", "")
+            return cached_stream(), cached.get("sources", [])
+
     retrieval_graph = build_agent_graph(
         build_answer_response_chain,
         extract_text_content=extract_text_content,

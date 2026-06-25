@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 import app_state
 from AI_agent import build_knowledge_preflight, run_agent, search_knowledge_payload
 from app_logging import get_logger, log_event
+from app_state import bump_knowledge_version
 from config import (
     BASE_URL,
     DEFAULT_KNOWLEDGE_MIN_SCORE,
@@ -368,6 +369,7 @@ def enqueue_index_job(
         use_original_name,
         force_reindex,
     )
+    bump_knowledge_version()
     return job_id
 
 
@@ -761,6 +763,7 @@ def delete_knowledge_document(document_id: str, user=Depends(require_admin)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Knowledge document was removed from indexes, but source file deletion failed: {error}",
         )
+    bump_knowledge_version()
     result = {
         "deleted": True,
         "document_id": document_id,
